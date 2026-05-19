@@ -350,12 +350,18 @@
 
 <main>
     <section id="section-todo">
-        <h2>Para Comprar</h2>
+        <h2 style="display: flex; justify-content: space-between;">
+            <span>Para Comprar</span>
+            <span id="count-todo" style="font-size: 0.75rem; background: #333; padding: 2px 8px; border-radius: 10px;">0 itens</span>
+        </h2>
         <div id="list-todo"></div>
     </section>
 
     <section id="section-cart">
-        <h2>No Carrinho</h2>
+        <h2 style="display: flex; justify-content: space-between;">
+            <span>No Carrinho</span>
+            <span id="count-cart" style="font-size: 0.75rem; background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 10px;">0 itens</span>
+        </h2>
         <div id="list-cart"></div>
     </section>
 
@@ -395,7 +401,6 @@
     <button id="btnResetApp" style="background: none; border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 8px; padding: 8px; font-size: 0.75rem; font-weight: bold; cursor: pointer; width: 100%; margin-top: 8px; opacity: 0.8;">ZERAR APLICATIVO (RESET TOTAL)</button>
 </footer>
 
-<!-- Modal de Edição Rápida -->
 <div class="modal-overlay" id="modalEdit">
     <div class="modal">
         <h3 class="modal-title" id="editTitle">Editar Item</h3>
@@ -562,7 +567,11 @@
     function calculateEstimatedTotal() {
         return state.items
             .filter(i => !i.checked)
-            .reduce((acc, i) => acc + (i.qty * (i.lastPrice || 0)), 0);
+            .reduce((acc, i) => {
+                // Usa o preço atual se definido, senão usa o último preço do banco
+                const priceToUse = i.price > 0 ? i.price : (i.lastPrice || 0);
+                return acc + (i.qty * priceToUse);
+            }, 0);
     }
 
     function calculateRealTotal() {
@@ -580,14 +589,23 @@
         listTodo.innerHTML = '';
         listCart.innerHTML = '';
         
+        let todoCount = 0;
+        let cartCount = 0;
+
         state.items.forEach(item => {
-            const el = createItemElement(item);
             if (item.checked) {
+                cartCount++;
+                const el = createItemElement(item, cartCount);
                 listCart.appendChild(el);
             } else {
+                todoCount++;
+                const el = createItemElement(item, todoCount);
                 listTodo.appendChild(el);
             }
         });
+
+        document.getElementById('count-todo').innerText = `${todoCount} ${todoCount === 1 ? 'item' : 'itens'}`;
+        document.getElementById('count-cart').innerText = `${cartCount} ${cartCount === 1 ? 'item' : 'itens'}`;
 
         // Totais
         document.getElementById('val-estimated').innerText = `R$ ${calculateEstimatedTotal().toFixed(2).replace('.', ',')}`;
@@ -604,176 +622,4 @@
         state.history.slice(0, 5).forEach(h => {
             const div = document.createElement('div');
             div.className = 'history-item';
-            div.innerHTML = `<span>${h.date}</span><b>R$ ${h.total.toFixed(2).replace('.', ',')}</b>`;
-            historyContainer.appendChild(div);
-        });
-    }
-
-    function createItemElement(item) {
-        const div = document.createElement('div');
-        div.className = `list-item ${item.checked ? 'checked' : ''}`;
-        
-        const subtext = item.type === 'un' 
-            ? `${item.qty} un x R$ ${item.price.toFixed(2)}`
-            : `${item.qty.toFixed(3)} kg x R$ ${item.price.toFixed(2)}`;
-
-        div.innerHTML = `
-            <div class="checkbox ${item.checked ? 'checked' : ''}" onclick="toggleItem(${item.id})"></div>
-            <div class="item-info" onclick="openEditModal(${item.id})">
-                <span class="item-name">${item.name}</span>
-                <span class="item-details">${subtext} = R$ ${(item.qty * item.price).toFixed(2)}</span>
-            </div>
-            <div class="item-actions">
-                <button class="btn-icon" onclick="deleteItem(${item.id})">✕</button>
-            </div>
-        `;
-        return div;
-    }
-
-    // --- MODAL E EVENTOS ---
-    let editingId = null;
-
-    function openEditModal(id) {
-        editingId = id;
-        const item = state.items.find(i => i.id === id);
-        if (!item) return;
-
-        document.getElementById('editTitle').innerText = item.name;
-        document.getElementById('editType').value = item.type;
-        document.getElementById('editQty').value = item.type === 'kg' ? item.qty.toFixed(3) : item.qty;
-        document.getElementById('editPrice').value = item.price || '';
-        
-        document.getElementById('modalEdit').style.display = 'flex';
-    }
-
-    function setupEventListeners() {
-        const input = document.getElementById('itemInput');
-        const btnAdd = document.getElementById('btnAdd');
-        const suggestions = document.getElementById('suggestions');
-
-        btnAdd.onclick = () => {
-            addItem(input.value);
-            input.value = '';
-            suggestions.style.display = 'none';
-        };
-
-        input.onkeyup = (e) => {
-            if (e.key === 'Enter') {
-                btnAdd.onclick();
-                return;
-            }
-            
-            const val = input.value.toLowerCase();
-            if (val.length < 1) {
-                suggestions.style.display = 'none';
-                return;
-            }
-
-            const matches = Object.keys(state.itemBank).filter(name => name.includes(val));
-            if (matches.length > 0) {
-                suggestions.innerHTML = '';
-                matches.forEach(m => {
-                    const div = document.createElement('div');
-                    div.className = 'suggestion-item';
-                    div.innerText = m;
-                    div.onclick = () => {
-                        input.value = m;
-                        suggestions.style.display = 'none';
-                        btnAdd.onclick();
-                    };
-                    suggestions.appendChild(div);
-                });
-                suggestions.style.display = 'block';
-            } else {
-                suggestions.style.display = 'none';
-            }
-        };
-
-        document.getElementById('btnCancelEdit').onclick = () => {
-            document.getElementById('modalEdit').style.display = 'none';
-        };
-
-        document.getElementById('btnSaveEdit').onclick = () => {
-            const type = document.getElementById('editType').value;
-            const qtyRaw = document.getElementById('editQty').value;
-            const price = parseFloat(document.getElementById('editPrice').value) || 0;
-            
-            updateItem(editingId, { type, qty: qtyRaw, price });
-            document.getElementById('modalEdit').style.display = 'none';
-        };
-
-        document.getElementById('btnFinish').onclick = finishPurchase;
-
-        // Lógica de Backup e Restauração
-        document.getElementById('btnBackup').onclick = () => {
-            try {
-                const dataStr = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
-                navigator.clipboard.writeText(dataStr).then(() => {
-                    alert("Backup copiado para a área de transferência! Guarde este código em um local seguro.");
-                });
-            } catch (e) {
-                alert("Erro ao criar backup.");
-            }
-        };
-
-        document.getElementById('btnRestore').onclick = () => {
-            const code = prompt("Cole aqui o código de backup:");
-            if (code) {
-                try {
-                    const decoded = JSON.parse(decodeURIComponent(escape(atob(code))));
-                    if (decoded && decoded.items) {
-                        state = decoded;
-                        save();
-                        render();
-                        alert("Dados restaurados com sucesso!");
-                    } else {
-                        throw new Error("Formato inválido");
-                    }
-                } catch (e) {
-                    alert("Código de backup inválido ou corrompido.");
-                }
-            }
-        };
-
-        // Lógica de Reset Total
-        document.getElementById('btnResetApp').onclick = () => {
-            const confirm1 = confirm("ATENÇÃO: Isso apagará TODOS os seus itens, histórico e banco de preços permanentemente. Deseja continuar?");
-            if (confirm1) {
-                const confirm2 = confirm("TEM CERTEZA? Esta ação não pode ser desfeita (a menos que você tenha um backup).");
-                if (confirm2) {
-                    localStorage.removeItem(STORAGE_KEY);
-                    location.reload();
-                }
-            }
-        };
-    }
-
-    init();
-
-    // --- SERVICE WORKER INLINE ---
-    if ('serviceWorker' in navigator) {
-        const swCode = `
-            const CACHE_NAME = 'shopping-list-v1';
-            const ASSETS = [
-                './',
-                './index.html'
-            ];
-
-            self.addEventListener('install', (e) => {
-                e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
-            });
-
-            self.addEventListener('fetch', (e) => {
-                e.respondWith(
-                    caches.match(e.request).then(response => response || fetch(e.request))
-                );
-            });
-        `;
-        const blob = new Blob([swCode], { type: 'application/javascript' });
-        const swUrl = URL.createObjectURL(blob);
-        navigator.serviceWorker.register(swUrl).catch(err => console.log('SW error:', err));
-    }
-</script>
-
-</body>
-</html>
+            div.innerHTML = `<span>${h.date}</span>
