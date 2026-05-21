@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#121212">
     <title>Lista de Compras Inteligente</title>
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkxpc3RhIGRlIENvbXByYXMgSW50ZWxpZ2VudGUiLAogICJzaG9ydF9uYW1lIjogIkn_bXByYXMiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzEyMTIxMiIsCiAgInRoZW1lX2NvbG9yIjogIiMxMjEyMTIiLAogICpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJodHRwczovL2Nkbi1pY29ucy1wbmcuZmxhdGljb24uY29tLzUxMi8zNTAyLzM1MDIyMTQucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9CiAgXQp9">
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkxpc3RhIGRlIENvbXByYXMgSW50ZWxpZ2VudGUiLAogICJzaG9ydF9uYW1lIjogIkNvbXByYXMiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzEyMTIxMiIsCiAgInRoZW1lX2NvbG9yIjogIiMxMjEyMTIiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJodHRwczovL2Nkbi1pY29ucy1wbmcuZmxhdGljb24uY29tLzUxMi8zNTAyLzM1MDIyMTQucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9CiAgXQp9">
     <style>
         :root {
             --bg-color: #121212;
@@ -370,8 +370,8 @@
         <div id="history-container"></div>
         
         <div class="backup-controls" style="display: flex; gap: 8px; margin-top: 16px;">
-            <button class="btn-cancel" id="btnBackup" style="font-size: 0.8rem; padding: 8px; flex: 1;">💾 Salvar Arquivo Backup</button>
-            <button class="btn-cancel" id="btnRestore" style="font-size: 0.8rem; padding: 8px; flex: 1;">🔄 Restaurar de Arquivo</button>
+            <button class="btn-cancel" id="btnBackup" style="font-size: 0.8rem; padding: 10px; flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;">💾 Salvar Backup</button>
+            <button class="btn-cancel" id="btnRestore" style="font-size: 0.8rem; padding: 10px; flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;">🔄 Restaurar Dados</button>
             <input type="file" id="fileImporter" accept=".txt" style="display: none;">
         </div>
 
@@ -713,23 +713,19 @@
 
         document.getElementById('btnFinish').onclick = finishPurchase;
 
-        // --- NOVO SISTEMA PROFISSIOAL DE BACKUP VIA ARQUIVO .TXT ---
+        // --- SISTEMA REFINADO DE BACKUP VIA ARQUIVO .TXT ---
         
         // 1. Exportação física do arquivo .txt
         document.getElementById('btnBackup').onclick = () => {
             try {
-                // Converte o estado atual para string JSON e depois mascara em Base64
                 const jsonStr = JSON.stringify(state);
                 const base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
                 
-                // Cria o blob contendo o texto gerado
                 const blob = new Blob([base64Data], { type: 'text/plain;charset=utf-8' });
                 
-                // Formata a data atual para o nome do arquivo
                 const hoje = new Date().toISOString().split('T')[0];
                 const nomeArquivo = `backup_compras_${hoje}.txt`;
                 
-                // Cria elemento de link virtual para disparar o download nativo do navegador
                 const linkVirtual = document.createElement('a');
                 linkVirtual.href = URL.createObjectURL(blob);
                 linkVirtual.download = nomeArquivo;
@@ -738,7 +734,6 @@
                 linkVirtual.click();
                 document.body.removeChild(linkVirtual);
                 
-                // Feedback visual leve
                 alert(`Backup gerado com sucesso!\nArquivo: ${nomeArquivo}\nVerifique sua pasta de Downloads.`);
             } catch (e) {
                 alert("Erro crítico ao tentar gerar o arquivo de backup físico.");
@@ -746,11 +741,11 @@
             }
         };
 
-        // 2. Intermediação do botão com o input de arquivo oculto
         const fileImporter = document.getElementById('fileImporter');
         
+        // 2. Reseta o input de arquivo antes de clicar para evitar bugs de repetição
         document.getElementById('btnRestore').onclick = () => {
-            // Dispara o clique no input oculto abrindo a janela de seleção do celular
+            fileImporter.value = ''; 
             fileImporter.click();
         };
 
@@ -763,11 +758,9 @@
             leitor.onload = (e) => {
                 try {
                     const conteudoBruto = e.target.result.trim();
-                    // Decodifica a string Base64 de volta para JSON
                     const jsonStr = decodeURIComponent(escape(atob(conteudoBruto)));
                     const dadosDecodificados = JSON.parse(jsonStr);
                     
-                    // Validação de segurança básica da estrutura do banco
                     if (dadosDecodificados && typeof dadosDecodificados === 'object' && ('items' in dadosDecodificados || 'itemBank' in dadosDecodificados)) {
                         if (confirm("Deseja realmente restaurar os dados deste arquivo? Isso substituirá a lista atual.")) {
                             state = dadosDecodificados;
@@ -782,8 +775,6 @@
                     alert("Falha ao ler o arquivo. Certifique-se de selecionar um arquivo .txt legítimo gerado anteriormente por este aplicativo.");
                     console.error(erro);
                 }
-                // Reseta o input para permitir carregar o mesmo arquivo novamente se necessário
-                fileImporter.value = '';
             };
             
             leitor.readAsText(arquivo);
