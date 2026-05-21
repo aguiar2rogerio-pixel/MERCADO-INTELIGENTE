@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#121212">
     <title>Lista de Compras Inteligente</title>
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkxpc3RhIGRlIENvbXByYXMgSW50ZWxpZ2VudGUiLAogICJzaG9ydF9uYW1lIjogIkNvbXByYXMiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzEyMTIxMiIsCiAgInRoZW1lX2NvbG9yIjogIiMxMjEyMTIiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJodHRwczovL2Nkbi1pY29ucy1wbmcuZmxhdGljb24uY29tLzUxMi8zNTAyLzM1MDIyMTQucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9CiAgXQp9">
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkxpc3RhIGRlIENvbXByYXMgSW50ZWxpZ2VudGUiLAogICJzaG9ydF9uYW1lIjogIkn_bXByYXMiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzEyMTIxMiIsCiAgInRoZW1lX2NvbG9yIjogIiMxMjEyMTIiLAogICpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJodHRwczovL2Nkbi1pY29ucy1wbmcuZmxhdGljb24uY29tLzUxMi8zNTAyLzM1MDIyMTQucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9CiAgXQp9">
     <style>
         :root {
             --bg-color: #121212;
@@ -368,10 +368,13 @@
     <section id="section-history">
         <h2>Histórico</h2>
         <div id="history-container"></div>
+        
         <div class="backup-controls" style="display: flex; gap: 8px; margin-top: 16px;">
-            <button class="btn-cancel" id="btnBackup" style="font-size: 0.8rem; padding: 8px;">💾 Criar Backup</button>
-            <button class="btn-cancel" id="btnRestore" style="font-size: 0.8rem; padding: 8px;">🔄 Restaurar</button>
+            <button class="btn-cancel" id="btnBackup" style="font-size: 0.8rem; padding: 8px; flex: 1;">💾 Salvar Arquivo Backup</button>
+            <button class="btn-cancel" id="btnRestore" style="font-size: 0.8rem; padding: 8px; flex: 1;">🔄 Restaurar de Arquivo</button>
+            <input type="file" id="fileImporter" accept=".txt" style="display: none;">
         </div>
+
         <div class="monthly-summary" id="monthly-summary">
             <div style="display: flex; justify-content: space-between;">
                 <span>Total do Mês:</span>
@@ -382,7 +385,6 @@
                 <span id="total-prev-month">R$ 0,00</span>
             </div>
         </div>
-
     </section>
 </main>
 
@@ -429,9 +431,9 @@
 <script>
     // --- ESTADO E CONFIGURAÇÃO ---
     let state = {
-        items: [], // { id, name, qty, type, price, checked, lastPrice }
-        history: [], // { date, total }
-        itemBank: {}, // { name: lastPrice }
+        items: [], 
+        history: [], 
+        itemBank: {}, 
         monthlyTotal: 0,
         prevMonthTotal: 0,
         currentMonth: new Date().getMonth()
@@ -441,7 +443,6 @@
 
     // --- INICIALIZAÇÃO ---
     async function init() {
-        // Blindagem contra limpeza de cache
         if (navigator.storage && navigator.storage.persist) {
             const isPersisted = await navigator.storage.persist();
             console.log(`Persistência de storage: ${isPersisted}`);
@@ -451,8 +452,6 @@
         if (saved) {
             try {
                 state = JSON.parse(saved);
-                // Removida a transição automática de mês para evitar resets inesperados
-                // checkMonthTransition(); 
             } catch (e) {
                 console.error("Erro ao carregar dados:", e);
             }
@@ -499,9 +498,6 @@
     function parseWeight(val) {
         let num = parseFloat(val.toString().replace(',', '.'));
         if (isNaN(num)) return 0;
-        // Se o usuário digitou algo como 300 (gramas) e o tipo é kg, ou se digitou 0.300
-        // Vamos assumir que se for > 5 e o contexto for peso, pode ser gramas.
-        // Mas a regra solicitada: "300g ou 0,300 -> 0.3kg"
         if (val.toString().toLowerCase().includes('g') || (num >= 5 && !val.toString().includes('.'))) {
             return num / 1000;
         }
@@ -516,7 +512,6 @@
             }
             state.items[idx] = { ...state.items[idx], ...updates };
             
-            // Se atualizou preço, salva no banco de itens
             if (updates.price !== undefined) {
                 state.itemBank[state.items[idx].name.toLowerCase()] = updates.price;
             }
@@ -531,7 +526,7 @@
         if (item) {
             item.checked = !item.checked;
             if (item.checked) {
-                openEditModal(id); // Abre ajuste rápido ao ticar
+                openEditModal(id); 
             }
             save();
             render();
@@ -551,7 +546,6 @@
             state.history.unshift({ date, total: realTotal });
             state.monthlyTotal += realTotal;
             
-            // Transbordo: Mantém apenas os não ticados
             state.items = state.items.filter(i => !i.checked).map(i => ({
                 ...i,
                 price: state.itemBank[i.name.toLowerCase()] || 0
@@ -568,7 +562,6 @@
         return state.items
             .filter(i => !i.checked)
             .reduce((acc, i) => {
-                // Usa o preço atual se definido, senão usa o último preço do banco
                 const priceToUse = i.price > 0 ? i.price : (i.lastPrice || 0);
                 return acc + (i.qty * priceToUse);
             }, 0);
@@ -607,7 +600,6 @@
         document.getElementById('count-todo').innerText = `${todoCount} ${todoCount === 1 ? 'item' : 'itens'}`;
         document.getElementById('count-cart').innerText = `${cartCount} ${cartCount === 1 ? 'item' : 'itens'}`;
 
-        // Totais
         document.getElementById('val-estimated').innerText = `R$ ${calculateEstimatedTotal().toFixed(2).replace('.', ',')}`;
         document.getElementById('val-real').innerText = `R$ ${calculateRealTotal().toFixed(2).replace('.', ',')}`;
         document.getElementById('total-month').innerText = `R$ ${state.monthlyTotal.toFixed(2).replace('.', ',')}`;
@@ -617,7 +609,6 @@
             document.getElementById('total-prev-month').innerText = `R$ ${state.prevMonthTotal.toFixed(2).replace('.', ',')}`;
         }
 
-        // Histórico (últimos 5)
         historyContainer.innerHTML = '';
         state.history.slice(0, 5).forEach(h => {
             const div = document.createElement('div');
@@ -722,35 +713,80 @@
 
         document.getElementById('btnFinish').onclick = finishPurchase;
 
-        // Lógica de Backup e Restauração
+        // --- NOVO SISTEMA PROFISSIOAL DE BACKUP VIA ARQUIVO .TXT ---
+        
+        // 1. Exportação física do arquivo .txt
         document.getElementById('btnBackup').onclick = () => {
             try {
-                const dataStr = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
-                navigator.clipboard.writeText(dataStr).then(() => {
-                    alert("Backup copiado para a área de transferência! Guarde este código em um local seguro.");
-                });
+                // Converte o estado atual para string JSON e depois mascara em Base64
+                const jsonStr = JSON.stringify(state);
+                const base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
+                
+                // Cria o blob contendo o texto gerado
+                const blob = new Blob([base64Data], { type: 'text/plain;charset=utf-8' });
+                
+                // Formata a data atual para o nome do arquivo
+                const hoje = new Date().toISOString().split('T')[0];
+                const nomeArquivo = `backup_compras_${hoje}.txt`;
+                
+                // Cria elemento de link virtual para disparar o download nativo do navegador
+                const linkVirtual = document.createElement('a');
+                linkVirtual.href = URL.createObjectURL(blob);
+                linkVirtual.download = nomeArquivo;
+                
+                document.body.appendChild(linkVirtual);
+                linkVirtual.click();
+                document.body.removeChild(linkVirtual);
+                
+                // Feedback visual leve
+                alert(`Backup gerado com sucesso!\nArquivo: ${nomeArquivo}\nVerifique sua pasta de Downloads.`);
             } catch (e) {
-                alert("Erro ao criar backup.");
+                alert("Erro crítico ao tentar gerar o arquivo de backup físico.");
+                console.error(e);
             }
         };
 
+        // 2. Intermediação do botão com o input de arquivo oculto
+        const fileImporter = document.getElementById('fileImporter');
+        
         document.getElementById('btnRestore').onclick = () => {
-            const code = prompt("Cole aqui o código de backup:");
-            if (code) {
+            // Dispara o clique no input oculto abrindo a janela de seleção do celular
+            fileImporter.click();
+        };
+
+        // 3. Leitura e validação do arquivo carregado
+        fileImporter.onchange = (evento) => {
+            const arquivo = evento.target.files[0];
+            if (!arquivo) return;
+
+            const leitor = new FileReader();
+            leitor.onload = (e) => {
                 try {
-                    const decoded = JSON.parse(decodeURIComponent(escape(atob(code))));
-                    if (decoded && decoded.items) {
-                        state = decoded;
-                        save();
-                        render();
-                        alert("Dados restaurados com sucesso!");
+                    const conteudoBruto = e.target.result.trim();
+                    // Decodifica a string Base64 de volta para JSON
+                    const jsonStr = decodeURIComponent(escape(atob(conteudoBruto)));
+                    const dadosDecodificados = JSON.parse(jsonStr);
+                    
+                    // Validação de segurança básica da estrutura do banco
+                    if (dadosDecodificados && typeof dadosDecodificados === 'object' && ('items' in dadosDecodificados || 'itemBank' in dadosDecodificados)) {
+                        if (confirm("Deseja realmente restaurar os dados deste arquivo? Isso substituirá a lista atual.")) {
+                            state = dadosDecodificados;
+                            save();
+                            render();
+                            alert("Banco de dados sincronizado e restaurado com sucesso!");
+                        }
                     } else {
-                        throw new Error("Formato inválido");
+                        throw new Error("Estrutura incompatível");
                     }
-                } catch (e) {
-                    alert("Código de backup inválido ou corrompido.");
+                } catch (erro) {
+                    alert("Falha ao ler o arquivo. Certifique-se de selecionar um arquivo .txt legítimo gerado anteriormente por este aplicativo.");
+                    console.error(erro);
                 }
-            }
+                // Reseta o input para permitir carregar o mesmo arquivo novamente se necessário
+                fileImporter.value = '';
+            };
+            
+            leitor.readAsText(arquivo);
         };
 
         // Lógica de Reset Total
