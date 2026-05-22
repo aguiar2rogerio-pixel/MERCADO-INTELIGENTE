@@ -303,6 +303,7 @@
             color: var(--text-color);
             padding: 12px;
             border-radius: 8px;
+            cursor: pointer;
         }
 
         .btn-save {
@@ -313,6 +314,7 @@
             padding: 12px;
             border-radius: 8px;
             font-weight: bold;
+            cursor: pointer;
         }
 
         .history-list {
@@ -322,9 +324,15 @@
         .history-item {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
+            padding: 12px 8px;
             border-bottom: 1px solid var(--border-color);
             font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .history-item:active {
+            background-color: #2c2c2c;
         }
 
         .monthly-summary {
@@ -332,6 +340,25 @@
             padding: 12px;
             border-radius: 8px;
             margin-top: 16px;
+        }
+
+        /* Estilos da lista dentro do modal do histórico */
+        .history-preview-list {
+            max-height: 240px;
+            overflow-y: auto;
+            margin-bottom: 16px;
+        }
+
+        .history-preview-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #333;
+            font-size: 0.9rem;
+        }
+
+        .history-preview-row span {
+            color: var(--text-secondary);
         }
 
         .hidden { display: none; }
@@ -368,13 +395,10 @@
     <section id="section-history">
         <h2>Histórico</h2>
         <div id="history-container"></div>
-        
         <div class="backup-controls" style="display: flex; gap: 8px; margin-top: 16px;">
-            <button class="btn-cancel" id="btnBackup" style="font-size: 0.8rem; padding: 10px; flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;">💾 Salvar Backup</button>
-            <button class="btn-cancel" id="btnRestore" style="font-size: 0.8rem; padding: 10px; flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;">🔄 Restaurar Dados</button>
-            <input type="file" id="fileImporter" accept=".txt" style="display: none;">
+            <button class="btn-cancel" id="btnBackup" style="font-size: 0.8rem; padding: 8px;">💾 Criar Backup</button>
+            <button class="btn-cancel" id="btnRestore" style="font-size: 0.8rem; padding: 8px;">🔄 Restaurar</button>
         </div>
-
         <div class="monthly-summary" id="monthly-summary">
             <div style="display: flex; justify-content: space-between;">
                 <span>Total do Mês:</span>
@@ -428,12 +452,24 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="modalHistoryView">
+    <div class="modal">
+        <h3 class="modal-title" id="historyViewTitle">Itens da Compra</h3>
+        <div class="history-preview-list" id="historyViewList"></div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; padding-top: 10px; border-top: 2px dashed #444;">
+            <span>Total:</span>
+            <b id="historyViewTotal" style="color: var(--primary-color); font-size: 1.1rem;">R$ 0,00</b>
+        </div>
+        <button class="btn-cancel" id="btnCloseHistoryView" style="width: 100%;">Fechar</button>
+    </div>
+</div>
+
 <script>
     // --- ESTADO E CONFIGURAÇÃO ---
     let state = {
-        items: [], 
-        history: [], 
-        itemBank: {}, 
+        items: [], // { id, name, qty, type, price, checked, lastPrice }
+        history: [], // { id, date, total, items: [] } -> Atualizado para guardar os itens comprados
+        itemBank: {}, // { name: lastPrice }
         monthlyTotal: 0,
         prevMonthTotal: 0,
         currentMonth: new Date().getMonth()
@@ -462,17 +498,6 @@
 
     function save() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }
-
-    function checkMonthTransition() {
-        const now = new Date();
-        const month = now.getMonth();
-        if (state.currentMonth !== month) {
-            state.prevMonthTotal = state.monthlyTotal;
-            state.monthlyTotal = 0;
-            state.currentMonth = month;
-            save();
-        }
     }
 
     // --- LÓGICA DE NEGÓCIO ---
@@ -526,7 +551,7 @@
         if (item) {
             item.checked = !item.checked;
             if (item.checked) {
-                openEditModal(id); 
+                openEditModal(id);
             }
             save();
             render();
@@ -541,11 +566,30 @@
 
     function finishPurchase() {
         const realTotal = calculateRealTotal();
-        if (realTotal > 0 || state.items.some(i => i.checked)) {
+        const checkedItems = state.items.filter(i => i.checked);
+
+        if (realTotal > 0 || checkedItems.length > 0) {
             const date = new Date().toLocaleDateString('pt-BR');
-            state.history.unshift({ date, total: realTotal });
+            
+            // MUDANÇA: Clonamos os itens atuais que estão no carrinho para salvar no histórico
+            const itemsToSave = checkedItems.map(i => ({
+                name: i.name,
+                qty: i.qty,
+                type: i.type,
+                price: i.price
+            }));
+
+            // Salvamos uma ID única para a compra, data, total e a cópia dos itens
+            state.history.unshift({ 
+                id: Date.now(), 
+                date, 
+                total: realTotal,
+                items: itemsToSave 
+            });
+            
             state.monthlyTotal += realTotal;
             
+            // Transbordo: Mantém apenas os não ticados
             state.items = state.items.filter(i => !i.checked).map(i => ({
                 ...i,
                 price: state.itemBank[i.name.toLowerCase()] || 0
@@ -609,11 +653,16 @@
             document.getElementById('total-prev-month').innerText = `R$ ${state.prevMonthTotal.toFixed(2).replace('.', ',')}`;
         }
 
+        // Histórico (últimos 5)
         historyContainer.innerHTML = '';
-        state.history.slice(0, 5).forEach(h => {
+        state.history.slice(0, 5).forEach((h, index) => {
             const div = document.createElement('div');
             div.className = 'history-item';
-            div.innerHTML = `<span>${h.date}</span><b>R$ ${h.total.toFixed(2).replace('.', ',')}</b>`;
+            div.innerHTML = `<span>📅 ${h.date}</span><b>R$ ${h.total.toFixed(2).replace('.', ',')}</b>`;
+            
+            // MUDANÇA: Ao clicar na linha da data, executa a função de visualizar os itens da compra
+            div.onclick = () => openHistoryViewModal(h);
+            
             historyContainer.appendChild(div);
         });
     }
@@ -627,19 +676,19 @@
             : `${item.qty.toFixed(3)} kg x R$ ${item.price.toFixed(2)}`;
 
         div.innerHTML = `
-            <div class="checkbox ${item.checked ? 'checked' : ''}" onclick="toggleItem(${item.id})"></div>
+            <div class="checkbox ${item.checked ? 'checked' : ''}" onclick="event.stopPropagation(); toggleItem(${item.id})"></div>
             <div class="item-info" onclick="openEditModal(${item.id})">
                 <span class="item-name">${index}. ${item.name}</span>
                 <span class="item-details">${subtext} = R$ ${(item.qty * item.price).toFixed(2)}</span>
             </div>
             <div class="item-actions">
-                <button class="btn-icon" onclick="deleteItem(${item.id})">✕</button>
+                <button class="btn-icon" onclick="event.stopPropagation(); deleteItem(${item.id})">✕</button>
             </div>
         `;
         return div;
     }
 
-    // --- MODAL E EVENTOS ---
+    // --- MODAL DE EDIÇÃO ---
     let editingId = null;
 
     function openEditModal(id) {
@@ -653,6 +702,34 @@
         document.getElementById('editPrice').value = item.price || '';
         
         document.getElementById('modalEdit').style.display = 'flex';
+    }
+
+    // NOVO: FUNÇÃO PARA ABRIR O MODAL DO HISTÓRICO COM OS ITENS
+    function openHistoryViewModal(purchase) {
+        document.getElementById('historyViewTitle').innerText = `Compra de ${purchase.date}`;
+        document.getElementById('historyViewTotal').innerText = `R$ ${purchase.total.toFixed(2).replace('.', ',')}`;
+        
+        const listContainer = document.getElementById('historyViewList');
+        listContainer.innerHTML = '';
+
+        // Se for uma compra antiga que ainda não guardava itens:
+        if (!purchase.items || purchase.items.length === 0) {
+            listContainer.innerHTML = `<div style="text-align:center; color:gray; padding:20px;">Esta compra não possui listagem de itens salva.</div>`;
+        } else {
+            // Monta as linhas de itens de forma enxuta e simples
+            purchase.items.forEach(i => {
+                const row = document.createElement('div');
+                row.className = 'history-preview-row';
+                const qtyFormatted = i.type === 'kg' ? i.qty.toFixed(3) : i.qty;
+                row.innerHTML = `
+                    <div><b>${i.name}</b><br><span>${qtyFormatted} ${i.type} x R$ ${i.price.toFixed(2).replace('.', ',')}</span></div>
+                    <div style="align-self: center;"><b>R$ ${(i.qty * i.price).toFixed(2).replace('.', ',')}</b></div>
+                `;
+                listContainer.appendChild(row);
+            });
+        }
+
+        document.getElementById('modalHistoryView').style.display = 'flex';
     }
 
     function setupEventListeners() {
@@ -713,71 +790,68 @@
 
         document.getElementById('btnFinish').onclick = finishPurchase;
 
-        // --- SISTEMA REFINADO DE BACKUP VIA ARQUIVO .TXT ---
-        
-        // 1. Exportação física do arquivo .txt
+        // NOVO: Fecha modal de visualização do histórico
+        document.getElementById('btnCloseHistoryView').onclick = () => {
+            document.getElementById('modalHistoryView').style.display = 'none';
+        };
+
+        // Lógica de Backup e Restauração por Arquivo TXT (Conforme imagens de campo)
         document.getElementById('btnBackup').onclick = () => {
             try {
-                const jsonStr = JSON.stringify(state);
-                const base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
+                const dataStr = JSON.stringify(state, null, 2);
+                const blob = new Blob([dataStr], { type: "text/plain;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
                 
-                const blob = new Blob([base64Data], { type: 'text/plain;charset=utf-8' });
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0];
+                const fileName = `backup_compras_${dateStr}.txt`;
+
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
                 
-                const hoje = new Date().toISOString().split('T')[0];
-                const nomeArquivo = `backup_compras_${hoje}.txt`;
-                
-                const linkVirtual = document.createElement('a');
-                linkVirtual.href = URL.createObjectURL(blob);
-                linkVirtual.download = nomeArquivo;
-                
-                document.body.appendChild(linkVirtual);
-                linkVirtual.click();
-                document.body.removeChild(linkVirtual);
-                
-                alert(`Backup gerado com sucesso!\nArquivo: ${nomeArquivo}\nVerifique sua pasta de Downloads.`);
+                alert(`Backup gerado com sucesso!\nArquivo:\n${fileName}\nVerifique sua pasta de Downloads.`);
             } catch (e) {
-                alert("Erro crítico ao tentar gerar o arquivo de backup físico.");
-                console.error(e);
+                alert("Erro ao criar arquivo de backup.");
             }
         };
 
-        const fileImporter = document.getElementById('fileImporter');
-        
-        // 2. Reseta o input de arquivo antes de clicar para evitar bugs de repetição
         document.getElementById('btnRestore').onclick = () => {
-            fileImporter.value = ''; 
-            fileImporter.click();
-        };
+            const confirmRestore = confirm("Deseja realmente restaurar os dados deste arquivo? Isso substituirá a lista atual.");
+            if (!confirmRestore) return;
 
-        // 3. Leitura e validação do arquivo carregado
-        fileImporter.onchange = (evento) => {
-            const arquivo = evento.target.files[0];
-            if (!arquivo) return;
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.txt';
+            
+            fileInput.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
 
-            const leitor = new FileReader();
-            leitor.onload = (e) => {
-                try {
-                    const conteudoBruto = e.target.result.trim();
-                    const jsonStr = decodeURIComponent(escape(atob(conteudoBruto)));
-                    const dadosDecodificados = JSON.parse(jsonStr);
-                    
-                    if (dadosDecodificados && typeof dadosDecodificados === 'object' && ('items' in dadosDecodificados || 'itemBank' in dadosDecodificados)) {
-                        if (confirm("Deseja realmente restaurar os dados deste arquivo? Isso substituirá a lista atual.")) {
-                            state = dadosDecodificados;
+                const reader = new FileReader();
+                reader.onload = event => {
+                    try {
+                        const decoded = JSON.parse(event.target.result);
+                        if (decoded && (decoded.items || decoded.history)) {
+                            state = decoded;
                             save();
                             render();
                             alert("Banco de dados sincronizado e restaurado com sucesso!");
+                        } else {
+                            throw new Error();
                         }
-                    } else {
-                        throw new Error("Estrutura incompatível");
+                    } catch (err) {
+                        alert("Arquivo de backup inválido ou corrompido.");
                     }
-                } catch (erro) {
-                    alert("Falha ao ler o arquivo. Certifique-se de selecionar um arquivo .txt legítimo gerado anteriormente por este aplicativo.");
-                    console.error(erro);
-                }
+                };
+                reader.readAsText(file);
             };
             
-            leitor.readAsText(arquivo);
+            fileInput.click();
         };
 
         // Lógica de Reset Total
@@ -799,10 +873,7 @@
     if ('serviceWorker' in navigator) {
         const swCode = `
             const CACHE_NAME = 'shopping-list-v1';
-            const ASSETS = [
-                './',
-                './index.html'
-            ];
+            const ASSETS = [ './', './index.html' ];
 
             self.addEventListener('install', (e) => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
