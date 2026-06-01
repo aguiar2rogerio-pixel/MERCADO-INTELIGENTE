@@ -108,7 +108,7 @@
             flex: 1;
             overflow-y: auto;
             padding: 16px;
-            padding-bottom: 120px;
+            padding-bottom: 140px;
         }
 
         section {
@@ -191,6 +191,34 @@
             color: var(--text-secondary);
             padding: 4px;
             cursor: pointer;
+        }
+
+        /* Novas Pílulas de Mês */
+        .month-pills {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .pill {
+            background-color: #2c2c2c;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pill.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+            font-weight: bold;
         }
 
         footer {
@@ -393,21 +421,23 @@
     </section>
 
     <section id="section-history">
-        <h2>Histórico</h2>
+        <h2>Histórico por Mês</h2>
+        
+        <!-- PÍLULAS ADICIONADAS AQUI -->
+        <div class="month-pills" id="monthPillsContainer"></div>
+
         <div id="history-container"></div>
+        
+        <div class="monthly-summary" id="monthly-summary">
+            <div style="display: flex; justify-content: space-between;">
+                <span id="label-total-month">Total do Mês:</span>
+                <b id="total-month">R$ 0,00</b>
+            </div>
+        </div>
+
         <div class="backup-controls" style="display: flex; gap: 8px; margin-top: 16px;">
             <button class="btn-cancel" id="btnBackup" style="font-size: 0.8rem; padding: 8px;">💾 Criar Backup</button>
             <button class="btn-cancel" id="btnRestore" style="font-size: 0.8rem; padding: 8px;">🔄 Restaurar</button>
-        </div>
-        <div class="monthly-summary" id="monthly-summary">
-            <div style="display: flex; justify-content: space-between;">
-                <span>Total do Mês:</span>
-                <b id="total-month">R$ 0,00</b>
-            </div>
-            <div id="prev-month-container" class="hidden" style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">
-                <span>Mês Anterior:</span>
-                <span id="total-prev-month">R$ 0,00</span>
-            </div>
         </div>
     </section>
 </main>
@@ -467,24 +497,27 @@
 <script>
     // --- ESTADO E CONFIGURAÇÃO ---
     let state = {
-        items: [], // { id, name, qty, type, price, checked, lastPrice }
-        history: [], // { id, date, total, items: [] } -> Atualizado para guardar os itens comprados
-        itemBank: {}, // { name: lastPrice }
-        monthlyTotal: 0,
-        prevMonthTotal: 0,
-        currentMonth: new Date().getMonth()
+        items: [], 
+        history: [], 
+        itemBank: {},
+        selectedMonthYear: "" // Guardará a pílula ativa (ex: "06/2026")
     };
 
-    const STORAGE_KEY = 'smart_shopping_list_v1';
+    const STORAGE_KEY = 'smart_shopping_list_v2'; // Sincronizado para nova versão de filtros
+
+    const MONTH_NAMES = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
 
     // --- INICIALIZAÇÃO ---
     async function init() {
         if (navigator.storage && navigator.storage.persist) {
-            const isPersisted = await navigator.storage.persist();
-            console.log(`Persistência de storage: ${isPersisted}`);
+            await navigator.storage.persist();
         }
 
-        const saved = localStorage.getItem(STORAGE_KEY);
+        // Tenta migrar da v1 antiga caso exista se for rodar por cima
+        let saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('smart_shopping_list_v1');
         if (saved) {
             try {
                 state = JSON.parse(saved);
@@ -492,6 +525,14 @@
                 console.error("Erro ao carregar dados:", e);
             }
         }
+
+        // Se não houver pílula selecionada padrão, define o mês atual do sistema
+        if (!state.selectedMonthYear) {
+            const now = new Date();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            state.selectedMonthYear = `${m}/${now.getFullYear()}`;
+        }
+
         render();
         setupEventListeners();
     }
@@ -569,9 +610,9 @@
         const checkedItems = state.items.filter(i => i.checked);
 
         if (realTotal > 0 || checkedItems.length > 0) {
-            const date = new Date().toLocaleDateString('pt-BR');
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('pt-BR'); // "01/06/2026"
             
-            // MUDANÇA: Clonamos os itens atuais que estão no carrinho para salvar no histórico
             const itemsToSave = checkedItems.map(i => ({
                 name: i.name,
                 qty: i.qty,
@@ -579,17 +620,17 @@
                 price: i.price
             }));
 
-            // Salvamos uma ID única para a compra, data, total e a cópia dos itens
             state.history.unshift({ 
                 id: Date.now(), 
-                date, 
+                date: dateStr, 
                 total: realTotal,
                 items: itemsToSave 
             });
             
-            state.monthlyTotal += realTotal;
+            // Define a visualização automática para o mês da compra finalizada
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            state.selectedMonthYear = `${m}/${now.getFullYear()}`;
             
-            // Transbordo: Mantém apenas os não ticados
             state.items = state.items.filter(i => !i.checked).map(i => ({
                 ...i,
                 price: state.itemBank[i.name.toLowerCase()] || 0
@@ -601,14 +642,10 @@
         }
     }
 
-    // --- CÁLCULOS ---
     function calculateEstimatedTotal() {
         return state.items
             .filter(i => !i.checked)
-            .reduce((acc, i) => {
-                const priceToUse = i.price > 0 ? i.price : (i.lastPrice || 0);
-                return acc + (i.qty * priceToUse);
-            }, 0);
+            .reduce((acc, i) => acc + (i.qty * (i.price > 0 ? i.price : (i.lastPrice || 0))), 0);
     }
 
     function calculateRealTotal() {
@@ -617,11 +654,20 @@
             .reduce((acc, i) => acc + (i.qty * (i.price || 0)), 0);
     }
 
+    // Extrai o MM/AAAA de uma string de data "DD/MM/AAAA"
+    function getMonthYearFromKey(dateStr) {
+        if (!dateStr) return "";
+        const parts = dateStr.split('/');
+        if (parts.length < 3) return "";
+        return `${parts[1]}/${parts[2]}`;
+    }
+
     // --- UI / RENDERING ---
     function render() {
         const listTodo = document.getElementById('list-todo');
         const listCart = document.getElementById('list-cart');
         const historyContainer = document.getElementById('history-container');
+        const pillsContainer = document.getElementById('monthPillsContainer');
         
         listTodo.innerHTML = '';
         listCart.innerHTML = '';
@@ -632,12 +678,10 @@
         state.items.forEach(item => {
             if (item.checked) {
                 cartCount++;
-                const el = createItemElement(item, cartCount);
-                listCart.appendChild(el);
+                listCart.appendChild(createItemElement(item, cartCount));
             } else {
                 todoCount++;
-                const el = createItemElement(item, todoCount);
-                listTodo.appendChild(el);
+                listTodo.appendChild(createItemElement(item, todoCount));
             }
         });
 
@@ -646,25 +690,71 @@
 
         document.getElementById('val-estimated').innerText = `R$ ${calculateEstimatedTotal().toFixed(2).replace('.', ',')}`;
         document.getElementById('val-real').innerText = `R$ ${calculateRealTotal().toFixed(2).replace('.', ',')}`;
-        document.getElementById('total-month').innerText = `R$ ${state.monthlyTotal.toFixed(2).replace('.', ',')}`;
-        
-        if (state.prevMonthTotal > 0) {
-            document.getElementById('prev-month-container').classList.remove('hidden');
-            document.getElementById('total-prev-month').innerText = `R$ ${state.prevMonthTotal.toFixed(2).replace('.', ',')}`;
-        }
 
-        // Histórico (últimos 5)
+        // --- GERAÇÃO DINÂMICA DAS PÍLULAS DE MESES ---
+        // Cria uma lista de meses únicos presentes no histórico + mês atual do sistema
+        const monthMap = new Set();
+        
+        // Sempre garante o mês atual visível por padrão
+        const now = new Date();
+        const currentMY = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+        monthMap.add(currentMY);
+
+        state.history.forEach(h => {
+            const my = getMonthYearFromKey(h.date);
+            if (my) monthMap.add(my);
+        });
+
+        // Converte para array ordenado de forma decrescente (meses mais novos primeiro)
+        const sortedMonths = Array.from(monthMap).sort((a, b) => {
+            const [mA, aA] = a.split('/').map(Number);
+            const [mB, aB] = b.split('/').map(Number);
+            return (aB * 12 + mB) - (aA * 12 + mA);
+        });
+
+        // Renderiza botões/pílulas na tela
+        pillsContainer.innerHTML = '';
+        sortedMonths.forEach(my => {
+            const [mStr, yStr] = my.split('/');
+            const monthIndex = parseInt(mStr, 10) - 1;
+            const labelText = `${MONTH_NAMES[monthIndex]} / ${yStr}`;
+
+            const button = document.createElement('button');
+            button.className = `pill ${state.selectedMonthYear === my ? 'active' : ''}`;
+            button.innerText = labelText;
+            button.onclick = () => {
+                state.selectedMonthYear = my;
+                save();
+                render();
+            };
+            pillsContainer.appendChild(button);
+        });
+
+        // --- CALCULA TOTAL DO MÊS SELECIONADO E FILTRA O HISTÓRICO ---
+        let totalSelectedMonth = 0;
         historyContainer.innerHTML = '';
-        state.history.slice(0, 5).forEach((h, index) => {
+
+        const filteredHistory = state.history.filter(h => getMonthYearFromKey(h.date) === state.selectedMonthYear);
+
+        filteredHistory.forEach(h => {
+            totalSelectedMonth += h.total;
+
             const div = document.createElement('div');
             div.className = 'history-item';
             div.innerHTML = `<span>📅 ${h.date}</span><b>R$ ${h.total.toFixed(2).replace('.', ',')}</b>`;
-            
-            // MUDANÇA: Ao clicar na linha da data, executa a função de visualizar os itens da compra
             div.onclick = () => openHistoryViewModal(h);
-            
             historyContainer.appendChild(div);
         });
+
+        if (filteredHistory.length === 0) {
+            historyContainer.innerHTML = `<div style="text-align:center; color:gray; padding:12px; font-size:0.85rem;">Nenhuma compra registrada neste mês.</div>`;
+        }
+
+        // Atualiza a interface com o preço correto baseado no filtro ativo
+        const [selM, selY] = state.selectedMonthYear.split('/');
+        const activeMonthName = MONTH_NAMES[parseInt(selM, 10) - 1];
+        document.getElementById('label-total-month').innerText = `Total de ${activeMonthName}:`;
+        document.getElementById('total-month').innerText = `R$ ${totalSelectedMonth.toFixed(2).replace('.', ',')}`;
     }
 
     function createItemElement(item, index) {
@@ -704,7 +794,6 @@
         document.getElementById('modalEdit').style.display = 'flex';
     }
 
-    // NOVO: FUNÇÃO PARA ABRIR O MODAL DO HISTÓRICO COM OS ITENS
     function openHistoryViewModal(purchase) {
         document.getElementById('historyViewTitle').innerText = `Compra de ${purchase.date}`;
         document.getElementById('historyViewTotal').innerText = `R$ ${purchase.total.toFixed(2).replace('.', ',')}`;
@@ -712,11 +801,9 @@
         const listContainer = document.getElementById('historyViewList');
         listContainer.innerHTML = '';
 
-        // Se for uma compra antiga que ainda não guardava itens:
         if (!purchase.items || purchase.items.length === 0) {
             listContainer.innerHTML = `<div style="text-align:center; color:gray; padding:20px;">Esta compra não possui listagem de itens salva.</div>`;
         } else {
-            // Monta as linhas de itens de forma enxuta e simples
             purchase.items.forEach(i => {
                 const row = document.createElement('div');
                 row.className = 'history-preview-row';
@@ -790,12 +877,10 @@
 
         document.getElementById('btnFinish').onclick = finishPurchase;
 
-        // NOVO: Fecha modal de visualização do histórico
         document.getElementById('btnCloseHistoryView').onclick = () => {
             document.getElementById('modalHistoryView').style.display = 'none';
         };
 
-        // Lógica de Backup e Restauração por Arquivo TXT (Conforme imagens de campo)
         document.getElementById('btnBackup').onclick = () => {
             try {
                 const dataStr = JSON.stringify(state, null, 2);
@@ -814,7 +899,7 @@
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 
-                alert(`Backup gerado com sucesso!\nArquivo:\n${fileName}\nVerifique sua pasta de Downloads.`);
+                alert(`Backup gerado com sucesso!\nArquivo:\n${fileName}`);
             } catch (e) {
                 alert("Erro ao criar arquivo de backup.");
             }
@@ -838,6 +923,11 @@
                         const decoded = JSON.parse(event.target.result);
                         if (decoded && (decoded.items || decoded.history)) {
                             state = decoded;
+                            // Se o arquivo antigo não tiver a pílula selecionada, aplica uma atual
+                            if(!state.selectedMonthYear){
+                                const now = new Date();
+                                state.selectedMonthYear = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                            }
                             save();
                             render();
                             alert("Banco de dados sincronizado e restaurado com sucesso!");
@@ -850,17 +940,16 @@
                 };
                 reader.readAsText(file);
             };
-            
             fileInput.click();
         };
 
-        // Lógica de Reset Total
         document.getElementById('btnResetApp').onclick = () => {
             const confirm1 = confirm("ATENÇÃO: Isso apagará TODOS os seus itens, histórico e banco de preços permanentemente. Deseja continuar?");
             if (confirm1) {
-                const confirm2 = confirm("TEM CERTEZA? Esta ação não pode ser desfeita (a menos que você tenha um backup).");
+                const confirm2 = confirm("TEM CERTEZA? Esta ação não pode ser desfeita.");
                 if (confirm2) {
                     localStorage.removeItem(STORAGE_KEY);
+                    localStorage.removeItem('smart_shopping_list_v1');
                     location.reload();
                 }
             }
@@ -869,20 +958,15 @@
 
     init();
 
-    // --- SERVICE WORKER INLINE ---
     if ('serviceWorker' in navigator) {
         const swCode = `
-            const CACHE_NAME = 'shopping-list-v1';
+            const CACHE_NAME = 'shopping-list-v2';
             const ASSETS = [ './', './index.html' ];
-
             self.addEventListener('install', (e) => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
             });
-
             self.addEventListener('fetch', (e) => {
-                e.respondWith(
-                    caches.match(e.request).then(response => response || fetch(e.request))
-                );
+                e.respondWith(caches.match(e.request).then(response => response || fetch(e.request)));
             });
         `;
         const blob = new Blob([swCode], { type: 'application/javascript' });
@@ -892,5 +976,4 @@
 </script>
 
 </body>
-</html>
-
+        </html>
