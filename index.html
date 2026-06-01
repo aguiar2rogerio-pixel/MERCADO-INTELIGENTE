@@ -108,7 +108,7 @@
             flex: 1;
             overflow-y: auto;
             padding: 16px;
-            padding-bottom: 140px;
+            padding-bottom: 160px;
         }
 
         section {
@@ -193,25 +193,34 @@
             cursor: pointer;
         }
 
-        /* Novas Pílulas de Mês */
+        /* CORREÇÃO VISUAL DAS PÍLULAS LADO A LADO */
         .month-pills {
             display: flex;
             gap: 8px;
             overflow-x: auto;
-            padding-bottom: 8px;
+            padding-bottom: 12px;
             margin-bottom: 12px;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .month-pills::-webkit-scrollbar {
+            height: 4px;
+        }
+        .month-pills::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 2px;
         }
 
         .pill {
             background-color: #2c2c2c;
             color: var(--text-secondary);
             border: 1px solid var(--border-color);
-            padding: 8px 16px;
+            padding: 10px 18px;
             border-radius: 20px;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             white-space: nowrap;
             cursor: pointer;
-            transition: all 0.2s;
+            display: inline-block;
         }
 
         .pill.active {
@@ -264,7 +273,7 @@
             width: 100%;
         }
 
-        /* Modal / Quick Edit */
+        /* Modais */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -301,11 +310,6 @@
             margin-bottom: 6px;
             font-size: 0.85rem;
             color: var(--text-secondary);
-        }
-
-        .input-row {
-            display: flex;
-            gap: 8px;
         }
 
         .modal input, .modal select {
@@ -345,10 +349,6 @@
             cursor: pointer;
         }
 
-        .history-list {
-            margin-top: 12px;
-        }
-
         .history-item {
             display: flex;
             justify-content: space-between;
@@ -356,7 +356,6 @@
             border-bottom: 1px solid var(--border-color);
             font-size: 0.9rem;
             cursor: pointer;
-            transition: background 0.2s;
         }
 
         .history-item:active {
@@ -365,12 +364,20 @@
 
         .monthly-summary {
             background-color: #2c2c2c;
-            padding: 12px;
+            padding: 14px;
             border-radius: 8px;
-            margin-top: 16px;
+            margin-top: 12px;
+            margin-bottom: 12px;
         }
 
-        /* Estilos da lista dentro do modal do histórico */
+        /* CORREÇÃO DO BACKUP: Sempre visível, acima do rodapé fixo */
+        .backup-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            margin-bottom: 24px; 
+        }
+
         .history-preview-list {
             max-height: 240px;
             overflow-y: auto;
@@ -388,8 +395,6 @@
         .history-preview-row span {
             color: var(--text-secondary);
         }
-
-        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -423,7 +428,6 @@
     <section id="section-history">
         <h2>Histórico por Mês</h2>
         
-        <!-- PÍLULAS ADICIONADAS AQUI -->
         <div class="month-pills" id="monthPillsContainer"></div>
 
         <div id="history-container"></div>
@@ -435,9 +439,9 @@
             </div>
         </div>
 
-        <div class="backup-controls" style="display: flex; gap: 8px; margin-top: 16px;">
-            <button class="btn-cancel" id="btnBackup" style="font-size: 0.8rem; padding: 8px;">💾 Criar Backup</button>
-            <button class="btn-cancel" id="btnRestore" style="font-size: 0.8rem; padding: 8px;">🔄 Restaurar</button>
+        <div class="backup-controls">
+            <button class="btn-cancel" id="btnBackup" style="font-size: 0.85rem; padding: 10px;">💾 Criar Backup</button>
+            <button class="btn-cancel" id="btnRestore" style="font-size: 0.85rem; padding: 10px;">🔄 Restaurar</button>
         </div>
     </section>
 </main>
@@ -454,7 +458,7 @@
         </div>
     </div>
     <button class="btn-finish" id="btnFinish">Finalizar Compra</button>
-    <button id="btnResetApp" style="background: none; border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 8px; padding: 8px; font-size: 0.75rem; font-weight: bold; cursor: pointer; width: 100%; margin-top: 8px; opacity: 0.8;">ZERAR APLICATIVO (RESET TOTAL)</button>
+    <button id="btnResetApp" style="background: none; border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 8px; padding: 6px; font-size: 0.7rem; font-weight: bold; cursor: pointer; width: 100%; margin-top: 4px; opacity: 0.5;">ZERAR APLICATIVO (RESET TOTAL)</button>
 </footer>
 
 <div class="modal-overlay" id="modalEdit">
@@ -495,29 +499,30 @@
 </div>
 
 <script>
-    // --- ESTADO E CONFIGURAÇÃO ---
     let state = {
         items: [], 
         history: [], 
         itemBank: {},
-        selectedMonthYear: "" // Guardará a pílula ativa (ex: "06/2026")
+        selectedMonthYear: ""
     };
 
-    const STORAGE_KEY = 'smart_shopping_list_v2'; // Sincronizado para nova versão de filtros
+    const STORAGE_KEY = 'smart_shopping_list_v3'; // Nova chave para limpar caches e forçar atualização
 
     const MONTH_NAMES = [
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
     ];
 
-    // --- INICIALIZAÇÃO ---
     async function init() {
         if (navigator.storage && navigator.storage.persist) {
             await navigator.storage.persist();
         }
 
-        // Tenta migrar da v1 antiga caso exista se for rodar por cima
-        let saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('smart_shopping_list_v1');
+        // Tenta buscar de qualquer versão anterior que exista no aparelho
+        let saved = localStorage.getItem(STORAGE_KEY) || 
+                    localStorage.getItem('smart_shopping_list_v2') || 
+                    localStorage.getItem('smart_shopping_list_v1');
+                    
         if (saved) {
             try {
                 state = JSON.parse(saved);
@@ -526,7 +531,6 @@
             }
         }
 
-        // Se não houver pílula selecionada padrão, define o mês atual do sistema
         if (!state.selectedMonthYear) {
             const now = new Date();
             const m = String(now.getMonth() + 1).padStart(2, '0');
@@ -541,7 +545,6 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
 
-    // --- LÓGICA DE NEGÓCIO ---
     function addItem(name) {
         if (!name.trim()) return;
         
@@ -611,7 +614,7 @@
 
         if (realTotal > 0 || checkedItems.length > 0) {
             const now = new Date();
-            const dateStr = now.toLocaleDateString('pt-BR'); // "01/06/2026"
+            const dateStr = now.toLocaleDateString('pt-BR');
             
             const itemsToSave = checkedItems.map(i => ({
                 name: i.name,
@@ -627,7 +630,6 @@
                 items: itemsToSave 
             });
             
-            // Define a visualização automática para o mês da compra finalizada
             const m = String(now.getMonth() + 1).padStart(2, '0');
             state.selectedMonthYear = `${m}/${now.getFullYear()}`;
             
@@ -654,7 +656,6 @@
             .reduce((acc, i) => acc + (i.qty * (i.price || 0)), 0);
     }
 
-    // Extrai o MM/AAAA de uma string de data "DD/MM/AAAA"
     function getMonthYearFromKey(dateStr) {
         if (!dateStr) return "";
         const parts = dateStr.split('/');
@@ -662,7 +663,6 @@
         return `${parts[1]}/${parts[2]}`;
     }
 
-    // --- UI / RENDERING ---
     function render() {
         const listTodo = document.getElementById('list-todo');
         const listCart = document.getElementById('list-cart');
@@ -691,11 +691,8 @@
         document.getElementById('val-estimated').innerText = `R$ ${calculateEstimatedTotal().toFixed(2).replace('.', ',')}`;
         document.getElementById('val-real').innerText = `R$ ${calculateRealTotal().toFixed(2).replace('.', ',')}`;
 
-        // --- GERAÇÃO DINÂMICA DAS PÍLULAS DE MESES ---
-        // Cria uma lista de meses únicos presentes no histórico + mês atual do sistema
+        // Mapeamento dinâmico de meses no histórico
         const monthMap = new Set();
-        
-        // Sempre garante o mês atual visível por padrão
         const now = new Date();
         const currentMY = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
         monthMap.add(currentMY);
@@ -705,14 +702,13 @@
             if (my) monthMap.add(my);
         });
 
-        // Converte para array ordenado de forma decrescente (meses mais novos primeiro)
         const sortedMonths = Array.from(monthMap).sort((a, b) => {
             const [mA, aA] = a.split('/').map(Number);
             const [mB, aB] = b.split('/').map(Number);
             return (aB * 12 + mB) - (aA * 12 + mA);
         });
 
-        // Renderiza botões/pílulas na tela
+        // Monta os botões horizontais contínuos exatamente como pediu
         pillsContainer.innerHTML = '';
         sortedMonths.forEach(my => {
             const [mStr, yStr] = my.split('/');
@@ -730,7 +726,6 @@
             pillsContainer.appendChild(button);
         });
 
-        // --- CALCULA TOTAL DO MÊS SELECIONADO E FILTRA O HISTÓRICO ---
         let totalSelectedMonth = 0;
         historyContainer.innerHTML = '';
 
@@ -747,10 +742,9 @@
         });
 
         if (filteredHistory.length === 0) {
-            historyContainer.innerHTML = `<div style="text-align:center; color:gray; padding:12px; font-size:0.85rem;">Nenhuma compra registrada neste mês.</div>`;
+            historyContainer.innerHTML = `<div style="text-align:center; color:gray; padding:12px; font-size:0.85rem;">Nenhuma compra neste mês.</div>`;
         }
 
-        // Atualiza a interface com o preço correto baseado no filtro ativo
         const [selM, selY] = state.selectedMonthYear.split('/');
         const activeMonthName = MONTH_NAMES[parseInt(selM, 10) - 1];
         document.getElementById('label-total-month').innerText = `Total de ${activeMonthName}:`;
@@ -778,7 +772,6 @@
         return div;
     }
 
-    // --- MODAL DE EDIÇÃO ---
     let editingId = null;
 
     function openEditModal(id) {
@@ -923,7 +916,6 @@
                         const decoded = JSON.parse(event.target.result);
                         if (decoded && (decoded.items || decoded.history)) {
                             state = decoded;
-                            // Se o arquivo antigo não tiver a pílula selecionada, aplica uma atual
                             if(!state.selectedMonthYear){
                                 const now = new Date();
                                 state.selectedMonthYear = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
@@ -949,6 +941,7 @@
                 const confirm2 = confirm("TEM CERTEZA? Esta ação não pode ser desfeita.");
                 if (confirm2) {
                     localStorage.removeItem(STORAGE_KEY);
+                    localStorage.removeItem('smart_shopping_list_v2');
                     localStorage.removeItem('smart_shopping_list_v1');
                     location.reload();
                 }
@@ -958,12 +951,17 @@
 
     init();
 
+    // Atualização forçada do Service Worker para aplicar as mudanças
     if ('serviceWorker' in navigator) {
         const swCode = `
-            const CACHE_NAME = 'shopping-list-v2';
+            const CACHE_NAME = 'shopping-list-v3';
             const ASSETS = [ './', './index.html' ];
             self.addEventListener('install', (e) => {
+                self.skipWaiting();
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+            });
+            self.addEventListener('activate', (e) => {
+                e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null))));
             });
             self.addEventListener('fetch', (e) => {
                 e.respondWith(caches.match(e.request).then(response => response || fetch(e.request)));
@@ -976,5 +974,5 @@
 </script>
 
 </body>
-    </html>
-    
+</html>
+
