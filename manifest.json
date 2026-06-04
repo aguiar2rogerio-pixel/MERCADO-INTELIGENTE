@@ -1,0 +1,20 @@
+{
+  "name": "Lista de Compras Inteligente",
+  "short_name": "Compras",
+  "start_url": "https://aguiar2rogerio-pixel.github.io/MERCADO-INTELIGENTE/index-2.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "icons": [
+    {
+      "src": "https://aguiar2rogerio-pixel.github.io/MERCADO-INTELIGENTE/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://aguiar2rogerio-pixel.github.io/MERCADO-INTELIGENTE/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
