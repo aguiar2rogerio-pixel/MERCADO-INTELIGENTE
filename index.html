@@ -6,8 +6,7 @@
     <meta name="theme-color" content="#121212">
     <title>Lista de Compras Inteligente</title>
     
-    <!-- Manifesto inline definitivo com os caminhos dos seus novos ícones -->
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkxpc3RhIGRlIENvbXByYXMgSW50ZWxpZ2VudGUiLAogICJzaG9ydF9uYW1lIjogIkNvbXByYXMiLAogICJzdGFydF91cmwiOiAiLi9pbmRleC0yLmh0bWwiLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMxMjIxMTIiLAogICJ0aGVtZV9jb2xvciI6ICIjMTIxMjEyIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiLi9pY29uLTE5MngxOTIucG5nIiwKICAgICAgInNpemVzIjogIjE5MngxOTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9LAogICAgewogICAgICAic3JjIjogIi4vaWNvbi01MTJ4NTEyLnBuZyIsCiAgICAgICJzaXplcyI6ICI1MTJ4NTEyIiwKICAgICAgInR5cGUiOiAiaW1hZ2UvcG5nIgogICAgfQogIF0KfQ==">
+    <link rel="manifest" href="manifest.json">
     
     <style>
         :root {
@@ -506,7 +505,7 @@
         selectedMonthYear: ""
     };
 
-    const STORAGE_KEY = 'smart_shopping_list_v5'; // Atualizado para invalidar caches antigos do navegador
+    const STORAGE_KEY = 'smart_shopping_list_v6';
 
     const MONTH_NAMES = [
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -519,6 +518,7 @@
         }
 
         let saved = localStorage.getItem(STORAGE_KEY) || 
+                    localStorage.getItem('smart_shopping_list_v5') ||
                     localStorage.getItem('smart_shopping_list_v4') ||
                     localStorage.getItem('smart_shopping_list_v3') || 
                     localStorage.getItem('smart_shopping_list_v2') || 
@@ -940,6 +940,7 @@
                 const confirm2 = confirm("TEM CERTEZA? Esta ação não pode ser desfeita.");
                 if (confirm2) {
                     localStorage.removeItem(STORAGE_KEY);
+                    localStorage.removeItem('smart_shopping_list_v5');
                     localStorage.removeItem('smart_shopping_list_v4');
                     localStorage.removeItem('smart_shopping_list_v3');
                     localStorage.removeItem('smart_shopping_list_v2');
@@ -952,24 +953,11 @@
 
     init();
 
+    // Vinculação limpa do Service Worker externo arquivo dedicado (sw.js)
     if ('serviceWorker' in navigator) {
-        const swCode = `
-            const CACHE_NAME = 'shopping-list-v5';
-            const ASSETS = [ './', './index-2.html' ];
-            self.addEventListener('install', (e) => {
-                self.skipWaiting();
-                e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
-            });
-            self.addEventListener('activate', (e) => {
-                e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null))));
-            });
-            self.addEventListener('fetch', (e) => {
-                e.respondWith(caches.match(e.request).then(response => response || fetch(e.request)));
-            });
-        `;
-        const blob = new Blob([swCode], { type: 'application/javascript' });
-        const swUrl = URL.createObjectURL(blob);
-        navigator.serviceWorker.register(swUrl).catch(err => console.log('SW error:', err));
+        navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('SW ativo com sucesso!', reg))
+        .catch(err => console.log('Erro ao registrar SW:', err));
     }
 </script>
 
