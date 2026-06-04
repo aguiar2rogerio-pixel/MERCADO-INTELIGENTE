@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#121212">
     <title>Lista de Compras Inteligente</title>
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkxpc3RhIGRlIENvbXByYXMgSW50ZWxpZ2VudGUiLAogICJzaG9ydF9uYW1lIjogIkNvbXByYXMiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzEyMTIxMiIsCiAgInRoZW1lX2NvbG9yIjogIiMxMjEyMTIiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJodHRwczovL2Nkbi1pY29ucy1wbmcuZmxhdGljb24uY29tLzUxMi8zNTAyLzM1MDIyMTQucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciCiAgICB9CiAgXQp9">
+    
+    <link rel="manifest" id="pwa-manifest" href="">
+    
     <style>
         :root {
             --bg-color: #121212;
@@ -193,7 +195,6 @@
             cursor: pointer;
         }
 
-        /* CORREÇÃO VISUAL DAS PÍLULAS LADO A LADO */
         .month-pills {
             display: flex;
             gap: 8px;
@@ -273,7 +274,6 @@
             width: 100%;
         }
 
-        /* Modais */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -370,7 +370,6 @@
             margin-bottom: 12px;
         }
 
-        /* CORREÇÃO DO BACKUP: Sempre visível, acima do rodapé fixo */
         .backup-controls {
             display: flex;
             gap: 8px;
@@ -499,6 +498,30 @@
 </div>
 
 <script>
+    // Gerador automático e seguro de Manifesto para vincular seus novos ícones do repositório
+    const manifestData = {
+        "name": "Lista de Compras Inteligente",
+        "short_name": "Compras",
+        "start_url": "./index-2.html",
+        "display": "standalone",
+        "background_color": "#121212",
+        "theme_color": "#121212",
+        "icons": [
+            {
+                "src": "./icon-192x192.png",
+                "sizes": "192x192",
+                "type": "image/png"
+            },
+            {
+                "src": "./icon-512x512.png",
+                "sizes": "512x512",
+                "type": "image/png"
+            }
+        ]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
+    document.getElementById('pwa-manifest').setAttribute('href', URL.createObjectURL(manifestBlob));
+
     let state = {
         items: [], 
         history: [], 
@@ -506,7 +529,7 @@
         selectedMonthYear: ""
     };
 
-    const STORAGE_KEY = 'smart_shopping_list_v3'; // Nova chave para limpar caches e forçar atualização
+    const STORAGE_KEY = 'smart_shopping_list_v4'; // Atualizado para limpar caches de ícones anteriores
 
     const MONTH_NAMES = [
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -518,8 +541,8 @@
             await navigator.storage.persist();
         }
 
-        // Tenta buscar de qualquer versão anterior que exista no aparelho
         let saved = localStorage.getItem(STORAGE_KEY) || 
+                    localStorage.getItem('smart_shopping_list_v3') || 
                     localStorage.getItem('smart_shopping_list_v2') || 
                     localStorage.getItem('smart_shopping_list_v1');
                     
@@ -691,7 +714,6 @@
         document.getElementById('val-estimated').innerText = `R$ ${calculateEstimatedTotal().toFixed(2).replace('.', ',')}`;
         document.getElementById('val-real').innerText = `R$ ${calculateRealTotal().toFixed(2).replace('.', ',')}`;
 
-        // Mapeamento dinâmico de meses no histórico
         const monthMap = new Set();
         const now = new Date();
         const currentMY = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
@@ -708,7 +730,6 @@
             return (aB * 12 + mB) - (aA * 12 + mA);
         });
 
-        // Monta os botões horizontais contínuos exatamente como pediu
         pillsContainer.innerHTML = '';
         sortedMonths.forEach(my => {
             const [mStr, yStr] = my.split('/');
@@ -941,6 +962,7 @@
                 const confirm2 = confirm("TEM CERTEZA? Esta ação não pode ser desfeita.");
                 if (confirm2) {
                     localStorage.removeItem(STORAGE_KEY);
+                    localStorage.removeItem('smart_shopping_list_v3');
                     localStorage.removeItem('smart_shopping_list_v2');
                     localStorage.removeItem('smart_shopping_list_v1');
                     location.reload();
@@ -951,11 +973,11 @@
 
     init();
 
-    // Atualização forçada do Service Worker para aplicar as mudanças
+    // Sincronização do Service Worker atualizado
     if ('serviceWorker' in navigator) {
         const swCode = `
-            const CACHE_NAME = 'shopping-list-v3';
-            const ASSETS = [ './', './index.html' ];
+            const CACHE_NAME = 'shopping-list-v4';
+            const ASSETS = [ './', './index-2.html' ];
             self.addEventListener('install', (e) => {
                 self.skipWaiting();
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
