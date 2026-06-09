@@ -472,11 +472,11 @@
         </div>
         <div class="form-row">
             <label id="labelQty">Quantidade / Peso</label>
-            <input type="text" id="editQty" placeholder="Ex: 2 ou 0.500">
+            <input type="number" id="editQty" step="any" inputmode="decimal" placeholder="Ex: 2 ou 0.500">
         </div>
         <div class="form-row">
             <label>Preço (R$)</label>
-            <input type="number" id="editPrice" step="0.01" placeholder="0,00">
+            <input type="number" id="editPrice" step="0.01" inputmode="decimal" placeholder="0,00">
         </div>
         <div class="modal-btns">
             <button class="btn-cancel" id="btnCancelEdit">Cancelar</button>
@@ -501,7 +501,7 @@
     let state = {
         items: [], 
         history: [], 
-        itemBank: {},
+        itemBank: {}, // Estrutura legada: { nome: preco } ou Nova: { nome: { price, type } }
         selectedMonthYear: ""
     };
 
@@ -512,21 +512,25 @@
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
     ];
 
+    // Função auxiliar para capitalizar a primeira letra do produto
+    function capitalizeName(name) {
+        let trimmed = name.trim();
+        if (!trimmed) return "";
+        return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    }
+
     async function init() {
         if (navigator.storage && navigator.storage.persist) {
             await navigator.storage.persist();
         }
 
         let saved = localStorage.getItem(STORAGE_KEY) || 
-                    localStorage.getItem('smart_shopping_list_v5') ||
-                    localStorage.getItem('smart_shopping_list_v4') ||
-                    localStorage.getItem('smart_shopping_list_v3') || 
-                    localStorage.getItem('smart_shopping_list_v2') || 
                     localStorage.getItem('smart_shopping_list_v1');
                     
         if (saved) {
             try {
-                state = JSON.parse(saved);
+                const parsed = JSON.parse(saved);
+                state = { ...state, ...parsed };
             } catch (e) {
                 console.error("Erro ao carregar dados:", e);
             }
@@ -549,12 +553,28 @@
     function addItem(name) {
         if (!name.trim()) return;
         
-        const lastPrice = state.itemBank[name.toLowerCase()] || 0;
+        // CORREÇÃO: Salva e busca com a primeira letra maiúscula
+        const formattedName = capitalizeName(name);
+        const key = formattedName.toLowerCase();
+        
+        // CORREÇÃO: Recupera o preço e o tipo salvos anteriormente do histórico
+        let lastPrice = 0;
+        let lastType = 'un';
+
+        if (state.itemBank[key]) {
+            if (typeof state.itemBank[key] === 'object') {
+                lastPrice = state.itemBank[key].price || 0;
+                lastType = state.itemBank[key].type || 'un';
+            } else {
+                lastPrice = state.itemBank[key]; // Compatibilidade com dados antigos salvos
+            }
+        }
+        
         const newItem = {
             id: Date.now(),
-            name: name.trim(),
+            name: formattedName,
             qty: 1,
-            type: 'un',
+            type: lastType,
             price: lastPrice,
             checked: false,
             lastPrice: lastPrice
@@ -568,23 +588,23 @@
     function parseWeight(val) {
         let num = parseFloat(val.toString().replace(',', '.'));
         if (isNaN(num)) return 0;
-        if (val.toString().toLowerCase().includes('g') || (num >= 5 && !val.toString().includes('.'))) {
-            return num / 1000;
-        }
         return num;
     }
 
     function updateItem(id, updates) {
         const idx = state.items.findIndex(i => i.id === id);
         if (idx !== -1) {
-            if (updates.qty !== undefined && state.items[idx].type === 'kg') {
+            if (updates.qty !== undefined) {
                 updates.qty = parseWeight(updates.qty);
             }
             state.items[idx] = { ...state.items[idx], ...updates };
             
-            if (updates.price !== undefined) {
-                state.itemBank[state.items[idx].name.toLowerCase()] = updates.price;
-            }
+            // CORREÇÃO: Salva no banco de dados tanto o preço quanto o tipo (un ou kg) juntos
+            const key = state.items[idx].name.toLowerCase();
+            state.itemBank[key] = {
+                price: state.items[idx].price,
+                type: state.items[idx].type
+            };
             
             save();
             render();
@@ -634,10 +654,17 @@
             const m = String(now.getMonth() + 1).padStart(2, '0');
             state.selectedMonthYear = `${m}/${now.getFullYear()}`;
             
-            state.items = state.items.filter(i => !i.checked).map(i => ({
-                ...i,
-                price: state.itemBank[i.name.toLowerCase()] || 0
-            }));
+            state.items = state.items.filter(i => !i.checked).map(i => {
+                const key = i.name.toLowerCase();
+                let lastPrice = 0;
+                if (state.itemBank[key]) {
+                    lastPrice = typeof state.itemBank[key] === 'object' ? state.itemBank[key].price : state.itemBank[key];
+                }
+                return {
+                    ...i,
+                    price: lastPrice
+                };
+            });
             
             save();
             render();
@@ -676,7 +703,10 @@
         let todoCount = 0;
         let cartCount = 0;
 
-        state.items.forEach(item => {
+        // CORREÇÃO: Ordena a lista principal "Para Comprar" e "No Carrinho" em ordem alfabética automaticamente
+        const sortedItems = [...state.items].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedItems.forEach(item => {
             if (item.checked) {
                 cartCount++;
                 listCart.appendChild(createItemElement(item, cartCount));
@@ -796,12 +826,15 @@
         if (!purchase.items || purchase.items.length === 0) {
             listContainer.innerHTML = `<div style="text-align:center; color:gray; padding:20px;">Esta compra não possui listagem de itens salva.</div>`;
         } else {
-            purchase.items.forEach(i => {
+            // CORREÇÃO: Organiza os itens da janela do histórico por ordem alfabética também
+            const sortedHistoryItems = [...purchase.items].sort((a, b) => a.name.localeCompare(b.name));
+            
+            sortedHistoryItems.forEach(i => {
                 const row = document.createElement('div');
                 row.className = 'history-preview-row';
                 const qtyFormatted = i.type === 'kg' ? i.qty.toFixed(3) : i.qty;
                 row.innerHTML = `
-                    <div><b>${i.name}</b><br><span>${qtyFormatted} ${i.type} x R$ ${i.price.toFixed(2).replace('.', ',')}</span></div>
+                    <div><b>${capitalizeName(i.name)}</b><br><span>${qtyFormatted} ${i.type} x R$ ${i.price.toFixed(2).replace('.', ',')}</span></div>
                     <div style="align-self: center;"><b>R$ ${(i.qty * i.price).toFixed(2).replace('.', ',')}</b></div>
                 `;
                 listContainer.appendChild(row);
@@ -834,15 +867,21 @@
                 return;
             }
 
-            const matches = Object.keys(state.itemBank).filter(name => name.includes(val));
+            // CORREÇÃO: Busca apenas itens que COMEÇAM com a letra/termo digitado (Busca pela Inicial)
+            // E organiza a lista de sugestões por ordem alfabética (.sort())
+            const matches = Object.keys(state.itemBank)
+                .filter(name => name.startsWith(val))
+                .sort();
+
             if (matches.length > 0) {
                 suggestions.innerHTML = '';
                 matches.forEach(m => {
                     const div = document.createElement('div');
                     div.className = 'suggestion-item';
-                    div.innerText = m;
+                    // Exibe a sugestão com a primeira letra maiúscula de forma elegante
+                    div.innerText = capitalizeName(m);
                     div.onclick = () => {
-                        input.value = m;
+                        input.value = capitalizeName(m);
                         suggestions.style.display = 'none';
                         btnAdd.onclick();
                     };
@@ -853,6 +892,13 @@
                 suggestions.style.display = 'none';
             }
         };
+
+        // Fecha as sugestões se clicar fora
+        document.addEventListener('click', (e) => {
+            if (e.target !== input) {
+                suggestions.style.display = 'none';
+            }
+        });
 
         document.getElementById('btnCancelEdit').onclick = () => {
             document.getElementById('modalEdit').style.display = 'none';
@@ -940,10 +986,6 @@
                 const confirm2 = confirm("TEM CERTEZA? Esta ação não pode ser desfeita.");
                 if (confirm2) {
                     localStorage.removeItem(STORAGE_KEY);
-                    localStorage.removeItem('smart_shopping_list_v5');
-                    localStorage.removeItem('smart_shopping_list_v4');
-                    localStorage.removeItem('smart_shopping_list_v3');
-                    localStorage.removeItem('smart_shopping_list_v2');
                     localStorage.removeItem('smart_shopping_list_v1');
                     location.reload();
                 }
@@ -953,11 +995,10 @@
 
     init();
 
-    // Vinculação limpa do Service Worker externo arquivo dedicado (sw.js)
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('SW ativo com sucesso!', reg))
-        .catch(err => console.log('Erro ao registrar SW:', err));
+        .then(reg => console.log('SW registrado com sucesso!', reg))
+        .catch(err => console.log('Erro ao registrar SW externo:', err));
     }
 </script>
 
