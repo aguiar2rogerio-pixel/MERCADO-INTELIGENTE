@@ -303,6 +303,7 @@
 
         .form-row {
             margin-bottom: 16px;
+            position: relative;
         }
 
         .form-row label {
@@ -320,6 +321,11 @@
             color: var(--text-color);
             font-size: 16px;
             width: 100%;
+            outline: none;
+        }
+
+        .modal input:focus, .modal select:focus {
+            border-color: var(--primary-color);
         }
 
         .modal-btns {
@@ -352,6 +358,7 @@
         .history-item {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             padding: 12px 8px;
             border-bottom: 1px solid var(--border-color);
             font-size: 0.9rem;
@@ -362,12 +369,42 @@
             background-color: #2c2c2c;
         }
 
+        .history-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .history-item-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
         .monthly-summary {
             background-color: #2c2c2c;
             padding: 14px;
             border-radius: 8px;
             margin-top: 12px;
             margin-bottom: 12px;
+        }
+
+        .breakdown-title {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-top: 10px;
+            margin-bottom: 6px;
+            border-top: 1px solid #444;
+            padding-top: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            padding: 2px 0;
+            color: var(--text-color);
         }
 
         .backup-controls {
@@ -436,6 +473,7 @@
                 <span id="label-total-month">Total do Mês:</span>
                 <b id="total-month">R$ 0,00</b>
             </div>
+            <div id="div-breakdown"></div>
         </div>
 
         <div class="backup-controls">
@@ -460,9 +498,13 @@
     <button id="btnResetApp" style="background: none; border: 1px solid var(--danger-color); color: var(--danger-color); border-radius: 8px; padding: 6px; font-size: 0.7rem; font-weight: bold; cursor: pointer; width: 100%; margin-top: 4px; opacity: 0.5;">ZERAR APLICATIVO (RESET TOTAL)</button>
 </footer>
 
+<!-- MODAL DE EDIÇÃO DO ITEM -->
 <div class="modal-overlay" id="modalEdit">
     <div class="modal">
-        <h3 class="modal-title" id="editTitle">Editar Item</h3>
+        <div class="form-row">
+            <label>Nome do Produto</label>
+            <input type="text" id="editItemName" autocomplete="off">
+        </div>
         <div class="form-row">
             <label>Tipo</label>
             <select id="editType">
@@ -485,9 +527,32 @@
     </div>
 </div>
 
+<!-- MODAL DE FINALIZAÇÃO DA COMPRA -->
+<div class="modal-overlay" id="modalFinishPurchase">
+    <div class="modal">
+        <h3 class="modal-title" style="color: var(--primary-color);">Detalhes da Compra</h3>
+        <div class="form-row">
+            <label>Onde foi a compra? (Mercado)</label>
+            <input type="text" id="finishMarket" placeholder="Ex: Shibata" autocomplete="off">
+            <div class="suggestions" id="marketSuggestions" style="right: 0;"></div>
+        </div>
+        <div class="form-row">
+            <label>Quem pagou?</label>
+            <input type="text" id="finishBuyer" placeholder="Ex: Rogério" autocomplete="off">
+            <div class="suggestions" id="buyerSuggestions" style="right: 0;"></div>
+        </div>
+        <div class="modal-btns">
+            <button class="btn-cancel" id="btnCancelFinish">Cancelar</button>
+            <button class="btn-save" id="btnConfirmFinish">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE VISUALIZAÇÃO DO HISTÓRICO -->
 <div class="modal-overlay" id="modalHistoryView">
     <div class="modal">
         <h3 class="modal-title" id="historyViewTitle">Itens da Compra</h3>
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;" id="historyViewMeta"></div>
         <div class="history-preview-list" id="historyViewList"></div>
         <div style="display: flex; justify-content: space-between; margin-bottom: 20px; padding-top: 10px; border-top: 2px dashed #444;">
             <span>Total:</span>
@@ -501,7 +566,9 @@
     let state = {
         items: [], 
         history: [], 
-        itemBank: {}, // Estrutura legada: { nome: preco } ou Nova: { nome: { price, type } }
+        itemBank: {}, // { nome: { price, type } }
+        marketBank: [], // Banco de mercados memorizados
+        buyerBank: [], // Banco de pagadores memorizados
         selectedMonthYear: ""
     };
 
@@ -512,7 +579,6 @@
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
     ];
 
-    // Função auxiliar para capitalizar a primeira letra do produto
     function capitalizeName(name) {
         let trimmed = name.trim();
         if (!trimmed) return "";
@@ -531,6 +597,8 @@
             try {
                 const parsed = JSON.parse(saved);
                 state = { ...state, ...parsed };
+                if (!state.marketBank) state.marketBank = [];
+                if (!state.buyerBank) state.buyerBank = [];
             } catch (e) {
                 console.error("Erro ao carregar dados:", e);
             }
@@ -553,11 +621,9 @@
     function addItem(name) {
         if (!name.trim()) return;
         
-        // CORREÇÃO: Salva e busca com a primeira letra maiúscula
         const formattedName = capitalizeName(name);
         const key = formattedName.toLowerCase();
         
-        // CORREÇÃO: Recupera o preço e o tipo salvos anteriormente do histórico
         let lastPrice = 0;
         let lastType = 'un';
 
@@ -566,7 +632,7 @@
                 lastPrice = state.itemBank[key].price || 0;
                 lastType = state.itemBank[key].type || 'un';
             } else {
-                lastPrice = state.itemBank[key]; // Compatibilidade com dados antigos salvos
+                lastPrice = state.itemBank[key];
             }
         }
         
@@ -597,9 +663,12 @@
             if (updates.qty !== undefined) {
                 updates.qty = parseWeight(updates.qty);
             }
+            if (updates.name !== undefined && updates.name.trim() !== "") {
+                updates.name = capitalizeName(updates.name);
+            }
+            
             state.items[idx] = { ...state.items[idx], ...updates };
             
-            // CORREÇÃO: Salva no banco de dados tanto o preço quanto o tipo (un ou kg) juntos
             const key = state.items[idx].name.toLowerCase();
             state.itemBank[key] = {
                 price: state.items[idx].price,
@@ -634,42 +703,68 @@
         const checkedItems = state.items.filter(i => i.checked);
 
         if (realTotal > 0 || checkedItems.length > 0) {
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('pt-BR');
-            
-            const itemsToSave = checkedItems.map(i => ({
-                name: i.name,
-                qty: i.qty,
-                type: i.type,
-                price: i.price
-            }));
-
-            state.history.unshift({ 
-                id: Date.now(), 
-                date: dateStr, 
-                total: realTotal,
-                items: itemsToSave 
-            });
-            
-            const m = String(now.getMonth() + 1).padStart(2, '0');
-            state.selectedMonthYear = `${m}/${now.getFullYear()}`;
-            
-            state.items = state.items.filter(i => !i.checked).map(i => {
-                const key = i.name.toLowerCase();
-                let lastPrice = 0;
-                if (state.itemBank[key]) {
-                    lastPrice = typeof state.itemBank[key] === 'object' ? state.itemBank[key].price : state.itemBank[key];
-                }
-                return {
-                    ...i,
-                    price: lastPrice
-                };
-            });
-            
-            save();
-            render();
-            alert('Compra finalizada com sucesso!');
+            document.getElementById('finishMarket').value = '';
+            document.getElementById('finishBuyer').value = '';
+            document.getElementById('modalFinishPurchase').style.display = 'flex';
         }
+    }
+
+    function confirmFinishPurchase() {
+        const marketInput = document.getElementById('finishMarket').value.trim();
+        const buyerInput = document.getElementById('finishBuyer').value.trim();
+
+        const market = marketInput ? capitalizeName(marketInput) : "Não Informado";
+        const buyer = buyerInput ? capitalizeName(buyerInput) : "Não Informado";
+
+        // Memoriza o mercado se ele for novo
+        if (marketInput && !state.marketBank.includes(market)) {
+            state.marketBank.push(market);
+        }
+        // Memoriza o pagador se ele for novo
+        if (buyerInput && !state.buyerBank.includes(buyer)) {
+            state.buyerBank.push(buyer);
+        }
+
+        const realTotal = calculateRealTotal();
+        const checkedItems = state.items.filter(i => i.checked);
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('pt-BR');
+        
+        const itemsToSave = checkedItems.map(i => ({
+            name: i.name,
+            qty: i.qty,
+            type: i.type,
+            price: i.price
+        }));
+
+        state.history.unshift({ 
+            id: Date.now(), 
+            date: dateStr, 
+            total: realTotal,
+            market: market,
+            buyer: buyer,
+            items: itemsToSave 
+        });
+        
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        state.selectedMonthYear = `${m}/${now.getFullYear()}`;
+        
+        state.items = state.items.filter(i => !i.checked).map(i => {
+            const key = i.name.toLowerCase();
+            let lastPrice = 0;
+            if (state.itemBank[key]) {
+                lastPrice = typeof state.itemBank[key] === 'object' ? state.itemBank[key].price : state.itemBank[key];
+            }
+            return {
+                ...i,
+                price: lastPrice
+            };
+        });
+        
+        document.getElementById('modalFinishPurchase').style.display = 'none';
+        save();
+        render();
+        alert('Compra finalizada com sucesso!');
     }
 
     function calculateEstimatedTotal() {
@@ -696,14 +791,15 @@
         const listCart = document.getElementById('list-cart');
         const historyContainer = document.getElementById('history-container');
         const pillsContainer = document.getElementById('monthPillsContainer');
+        const divBreakdown = document.getElementById('div-breakdown');
         
         listTodo.innerHTML = '';
         listCart.innerHTML = '';
+        divBreakdown.innerHTML = '';
         
         let todoCount = 0;
         let cartCount = 0;
 
-        // CORREÇÃO: Ordena a lista principal "Para Comprar" e "No Carrinho" em ordem alfabética automaticamente
         const sortedItems = [...state.items].sort((a, b) => a.name.localeCompare(b.name));
 
         sortedItems.forEach(item => {
@@ -756,6 +852,7 @@
         });
 
         let totalSelectedMonth = 0;
+        let breakdown = {}; // Guarda a soma de gastos por pagador
         historyContainer.innerHTML = '';
 
         const filteredHistory = state.history.filter(h => getMonthYearFromKey(h.date) === state.selectedMonthYear);
@@ -763,9 +860,21 @@
         filteredHistory.forEach(h => {
             totalSelectedMonth += h.total;
 
+            // Lógica do rateio por pessoa
+            const pMarket = h.market || "Não Informado";
+            const pBuyer = h.buyer || "Não Informado";
+            if (!breakdown[pBuyer]) breakdown[pBuyer] = 0;
+            breakdown[pBuyer] += h.total;
+
             const div = document.createElement('div');
             div.className = 'history-item';
-            div.innerHTML = `<span>📅 ${h.date}</span><b>R$ ${h.total.toFixed(2).replace('.', ',')}</b>`;
+            div.innerHTML = `
+                <div class="history-item-info">
+                    <span>📅 ${h.date}</span>
+                    <span class="history-item-sub">${pMarket} (${pBuyer})</span>
+                </div>
+                <b>R$ ${h.total.toFixed(2).replace('.', ',')}</b>
+            `;
             div.onclick = () => openHistoryViewModal(h);
             historyContainer.appendChild(div);
         });
@@ -778,6 +887,22 @@
         const activeMonthName = MONTH_NAMES[parseInt(selM, 10) - 1];
         document.getElementById('label-total-month').innerText = `Total de ${activeMonthName}:`;
         document.getElementById('total-month').innerText = `R$ ${totalSelectedMonth.toFixed(2).replace('.', ',')}`;
+
+        // Renderiza a divisão de contas na caixinha cinza se houver dados
+        const buyers = Object.keys(breakdown);
+        if (buyers.length > 0) {
+            const title = document.createElement('div');
+            title.className = 'breakdown-title';
+            title.innerText = 'Resumo por Colaboração';
+            divBreakdown.appendChild(title);
+
+            buyers.sort().forEach(b => {
+                const row = document.createElement('div');
+                row.className = 'breakdown-row';
+                row.innerHTML = `<span>👤 ${b}</span><b>R$ ${breakdown[b].toFixed(2).replace('.', ',')}</b>`;
+                divBreakdown.appendChild(row);
+            });
+        }
     }
 
     function createItemElement(item, index) {
@@ -808,7 +933,7 @@
         const item = state.items.find(i => i.id === id);
         if (!item) return;
 
-        document.getElementById('editTitle').innerText = item.name;
+        document.getElementById('editItemName').value = item.name;
         document.getElementById('editType').value = item.type;
         document.getElementById('editQty').value = item.type === 'kg' ? item.qty.toFixed(3) : item.qty;
         document.getElementById('editPrice').value = item.price || '';
@@ -818,6 +943,7 @@
 
     function openHistoryViewModal(purchase) {
         document.getElementById('historyViewTitle').innerText = `Compra de ${purchase.date}`;
+        document.getElementById('historyViewMeta').innerText = `Mercado: ${purchase.market || "Não Informado"} | Pago por: ${purchase.buyer || "Não Informado"}`;
         document.getElementById('historyViewTotal').innerText = `R$ ${purchase.total.toFixed(2).replace('.', ',')}`;
         
         const listContainer = document.getElementById('historyViewList');
@@ -826,7 +952,6 @@
         if (!purchase.items || purchase.items.length === 0) {
             listContainer.innerHTML = `<div style="text-align:center; color:gray; padding:20px;">Esta compra não possui listagem de itens salva.</div>`;
         } else {
-            // CORREÇÃO: Organiza os itens da janela do histórico por ordem alfabética também
             const sortedHistoryItems = [...purchase.items].sort((a, b) => a.name.localeCompare(b.name));
             
             sortedHistoryItems.forEach(i => {
@@ -842,6 +967,59 @@
         }
 
         document.getElementById('modalHistoryView').style.display = 'flex';
+    }
+
+    // Gerenciador genérico de menus suspensos automáticos
+    function setupLiveSuggestions(inputId, suggestionsId, bankKey) {
+        const input = document.getElementById(inputId);
+        const suggestions = document.getElementById(suggestionsId);
+
+        input.onkeyup = () => {
+            const val = input.value.toLowerCase();
+            if (val.length < 1) {
+                suggestions.style.display = 'none';
+                return;
+            }
+
+            const matches = state[bankKey]
+                .filter(name => name.toLowerCase().startsWith(val))
+                .sort();
+
+            if (matches.length > 0) {
+                suggestions.innerHTML = '';
+                matches.forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerText = m;
+                    div.onclick = () => {
+                        input.value = m;
+                        suggestions.style.display = 'none';
+                    };
+                    suggestions.appendChild(div);
+                });
+                suggestions.style.display = 'block';
+            } else {
+                suggestions.style.display = 'none';
+            }
+        };
+
+        input.onfocus = () => {
+            if (input.value === "" && state[bankKey].length > 0) {
+                const sorted = [...state[bankKey]].sort();
+                suggestions.innerHTML = '';
+                sorted.forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.innerText = m;
+                    div.onclick = () => {
+                        input.value = m;
+                        suggestions.style.display = 'none';
+                    };
+                    suggestions.appendChild(div);
+                });
+                suggestions.style.display = 'block';
+            }
+        };
     }
 
     function setupEventListeners() {
@@ -867,8 +1045,6 @@
                 return;
             }
 
-            // CORREÇÃO: Busca apenas itens que COMEÇAM com a letra/termo digitado (Busca pela Inicial)
-            // E organiza a lista de sugestões por ordem alfabética (.sort())
             const matches = Object.keys(state.itemBank)
                 .filter(name => name.startsWith(val))
                 .sort();
@@ -878,7 +1054,6 @@
                 matches.forEach(m => {
                     const div = document.createElement('div');
                     div.className = 'suggestion-item';
-                    // Exibe a sugestão com a primeira letra maiúscula de forma elegante
                     div.innerText = capitalizeName(m);
                     div.onclick = () => {
                         input.value = capitalizeName(m);
@@ -893,11 +1068,15 @@
             }
         };
 
-        // Fecha as sugestões se clicar fora
+        // Ativa os autocompletes inteligentes de Mercado e Comprador
+        setupLiveSuggestions('finishMarket', 'marketSuggestions', 'marketBank');
+        setupLiveSuggestions('finishBuyer', 'buyerSuggestions', 'buyerBank');
+
+        // Fecha menus suspensos ao clicar fora
         document.addEventListener('click', (e) => {
-            if (e.target !== input) {
-                suggestions.style.display = 'none';
-            }
+            if (e.target !== input) suggestions.style.display = 'none';
+            if (e.target !== document.getElementById('finishMarket')) document.getElementById('marketSuggestions').style.display = 'none';
+            if (e.target !== document.getElementById('finishBuyer')) document.getElementById('buyerSuggestions').style.display = 'none';
         });
 
         document.getElementById('btnCancelEdit').onclick = () => {
@@ -905,15 +1084,22 @@
         };
 
         document.getElementById('btnSaveEdit').onclick = () => {
+            const name = document.getElementById('editItemName').value;
             const type = document.getElementById('editType').value;
             const qtyRaw = document.getElementById('editQty').value;
             const price = parseFloat(document.getElementById('editPrice').value) || 0;
             
-            updateItem(editingId, { type, qty: qtyRaw, price });
+            updateItem(editingId, { name, type, qty: qtyRaw, price });
             document.getElementById('modalEdit').style.display = 'none';
         };
 
         document.getElementById('btnFinish').onclick = finishPurchase;
+        
+        document.getElementById('btnCancelFinish').onclick = () => {
+            document.getElementById('modalFinishPurchase').style.display = 'none';
+        };
+        
+        document.getElementById('btnConfirmFinish').onclick = confirmFinishPurchase;
 
         document.getElementById('btnCloseHistoryView').onclick = () => {
             document.getElementById('modalHistoryView').style.display = 'none';
@@ -965,6 +1151,8 @@
                                 const now = new Date();
                                 state.selectedMonthYear = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
                             }
+                            if(!state.marketBank) state.marketBank = [];
+                            if(!state.buyerBank) state.buyerBank = [];
                             save();
                             render();
                             alert("Banco de dados sincronizado e restaurado com sucesso!");
