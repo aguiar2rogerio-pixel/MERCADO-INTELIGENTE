@@ -380,6 +380,24 @@
             color: var(--text-secondary);
         }
 
+        .btn-see-more {
+            width: 100%;
+            background: #2c2c2c;
+            border: 1px solid var(--border-color);
+            color: var(--primary-color);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .btn-see-more:active {
+            background-color: #333;
+        }
+
         .monthly-summary {
             background-color: #2c2c2c;
             padding: 14px;
@@ -467,6 +485,7 @@
         <div class="month-pills" id="monthPillsContainer"></div>
 
         <div id="history-container"></div>
+        <button id="btnSeeMoreHistory" class="btn-see-more" style="display: none;">Ver mais compras</button>
         
         <div class="monthly-summary" id="monthly-summary">
             <div style="display: flex; justify-content: space-between;">
@@ -571,6 +590,8 @@
         buyerBank: [], // Banco de pagadores memorizados
         selectedMonthYear: ""
     };
+
+    let historyLimit = 5; // Controle para limitar exibições do histórico
 
     const STORAGE_KEY = 'smart_shopping_list_v6';
 
@@ -790,6 +811,7 @@
         const listTodo = document.getElementById('list-todo');
         const listCart = document.getElementById('list-cart');
         const historyContainer = document.getElementById('history-container');
+        const btnSeeMoreHistory = document.getElementById('btnSeeMoreHistory');
         const pillsContainer = document.getElementById('monthPillsContainer');
         const divBreakdown = document.getElementById('div-breakdown');
         
@@ -845,6 +867,7 @@
             button.innerText = labelText;
             button.onclick = () => {
                 state.selectedMonthYear = my;
+                historyLimit = 5; // Reseta a trava para 5 lançamentos ao trocar de mês
                 save();
                 render();
             };
@@ -857,14 +880,21 @@
 
         const filteredHistory = state.history.filter(h => getMonthYearFromKey(h.date) === state.selectedMonthYear);
 
+        // Aplica o limite dos últimos N itens
+        const visibleHistory = filteredHistory.slice(0, historyLimit);
+
         filteredHistory.forEach(h => {
             totalSelectedMonth += h.total;
 
             // Lógica do rateio por pessoa
-            const pMarket = h.market || "Não Informado";
             const pBuyer = h.buyer || "Não Informado";
             if (!breakdown[pBuyer]) breakdown[pBuyer] = 0;
             breakdown[pBuyer] += h.total;
+        });
+
+        visibleHistory.forEach(h => {
+            const pMarket = h.market || "Não Informado";
+            const pBuyer = h.buyer || "Não Informado";
 
             const div = document.createElement('div');
             div.className = 'history-item';
@@ -878,6 +908,15 @@
             div.onclick = () => openHistoryViewModal(h);
             historyContainer.appendChild(div);
         });
+
+        // Exibe ou oculta o botão de "Ver Mais" dependendo do número de compras
+        if (filteredHistory.length > historyLimit) {
+            const remaining = filteredHistory.length - historyLimit;
+            btnSeeMoreHistory.innerText = `Ver mais compras (${remaining} restantes)`;
+            btnSeeMoreHistory.style.display = 'block';
+        } else {
+            btnSeeMoreHistory.style.display = 'none';
+        }
 
         if (filteredHistory.length === 0) {
             historyContainer.innerHTML = `<div style="text-align:center; color:gray; padding:12px; font-size:0.85rem;">Nenhuma compra neste mês.</div>`;
@@ -1072,6 +1111,12 @@
         setupLiveSuggestions('finishMarket', 'marketSuggestions', 'marketBank');
         setupLiveSuggestions('finishBuyer', 'buyerSuggestions', 'buyerBank');
 
+        // Ação para expandir o histórico ao clicar em "Ver Mais"
+        document.getElementById('btnSeeMoreHistory').onclick = () => {
+            historyLimit += 5;
+            render();
+        };
+
         // Fecha menus suspensos ao clicar fora
         document.addEventListener('click', (e) => {
             if (e.target !== input) suggestions.style.display = 'none';
@@ -1192,4 +1237,3 @@
 
 </body>
 </html>
-
