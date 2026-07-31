@@ -1,20 +1,20 @@
-const CACHE_NAME = 'smart-shopping-v2'; // Mudamos para v2 para forçar a limpeza do cache antigo
+const CACHE_NAME = 'smart-shopping-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json'
 ];
 
-// Instala o Service Worker e guarda os arquivos novos no cache
+// Instala o Service Worker e prepara o cache inicial
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
-    }).then(() => self.skipWaiting()) // Força o SW novo a se tornar ativo imediatamente
+    }).then(() => self.skipWaiting()) // Força o SW novo a ativar imediatamente
   );
 });
 
-// Limpa os caches antigos (deleta a "versão velha" do aplicativo)
+// Limpa os caches antigos ao ativar uma nova versão
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
@@ -25,15 +25,27 @@ self.addEventListener('activate', (e) => {
           }
         })
       );
-    }).then(() => self.clients.claim()) // Assume o controle da página na hora
+    }).then(() => self.clients.claim()) // Assume o controle dos celulares conectados na hora
   );
 });
 
-// Responde com o cache, mas busca na rede se houver internet
+// REDE PRIMEIRO (Network-First): Busca o mais novo na internet. Se estiver offline, usa o cache.
 self.addEventListener('fetch', (e) => {
   e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
-      return cachedResponse || fetch(e.request);
-    })
+    fetch(e.request)
+      .then((networkResponse) => {
+        // Se a busca na rede deu certo, atualiza o cache silenciosamente em segundo plano
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(e.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        // Se deu erro (sem internet/offline), entrega a versão salva no celular
+        return caches.match(e.request);
+      })
   );
 });
