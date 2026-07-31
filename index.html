@@ -231,6 +231,26 @@
             font-weight: bold;
         }
 
+        /* PAINEL FIXO DE HISTÓRICO COM ROLAGEM INTERNA */
+        .history-scroll-box {
+            max-height: 280px;
+            overflow-y: auto;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 4px 12px;
+            margin-bottom: 12px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .history-scroll-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        .history-scroll-box::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 3px;
+        }
+
         footer {
             position: fixed;
             bottom: 0;
@@ -359,14 +379,18 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 8px;
+            padding: 12px 0;
             border-bottom: 1px solid var(--border-color);
             font-size: 0.9rem;
             cursor: pointer;
         }
 
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
         .history-item:active {
-            background-color: #2c2c2c;
+            opacity: 0.7;
         }
 
         .history-item-info {
@@ -378,24 +402,6 @@
         .history-item-sub {
             font-size: 0.75rem;
             color: var(--text-secondary);
-        }
-
-        .btn-see-more {
-            width: 100%;
-            background: #2c2c2c;
-            border: 1px solid var(--border-color);
-            color: var(--primary-color);
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 8px;
-            text-align: center;
-        }
-
-        .btn-see-more:active {
-            background-color: #333;
         }
 
         .monthly-summary {
@@ -484,8 +490,8 @@
         
         <div class="month-pills" id="monthPillsContainer"></div>
 
-        <div id="history-container"></div>
-        <button id="btnSeeMoreHistory" class="btn-see-more" style="display: none;">Ver mais compras</button>
+        <!-- QUADRO COM ROLAGEM INTERNA PARA O HISTÓRICO -->
+        <div class="history-scroll-box" id="history-container"></div>
         
         <div class="monthly-summary" id="monthly-summary">
             <div style="display: flex; justify-content: space-between;">
@@ -585,13 +591,11 @@
     let state = {
         items: [], 
         history: [], 
-        itemBank: {}, // { nome: { price, type } }
-        marketBank: [], // Banco de mercados memorizados
-        buyerBank: [], // Banco de pagadores memorizados
+        itemBank: {}, 
+        marketBank: [], 
+        buyerBank: [], 
         selectedMonthYear: ""
     };
-
-    let historyLimit = 5; // Controle para limitar exibições do histórico
 
     const STORAGE_KEY = 'smart_shopping_list_v6';
 
@@ -737,11 +741,9 @@
         const market = marketInput ? capitalizeName(marketInput) : "Não Informado";
         const buyer = buyerInput ? capitalizeName(buyerInput) : "Não Informado";
 
-        // Memoriza o mercado se ele for novo
         if (marketInput && !state.marketBank.includes(market)) {
             state.marketBank.push(market);
         }
-        // Memoriza o pagador se ele for novo
         if (buyerInput && !state.buyerBank.includes(buyer)) {
             state.buyerBank.push(buyer);
         }
@@ -811,7 +813,6 @@
         const listTodo = document.getElementById('list-todo');
         const listCart = document.getElementById('list-cart');
         const historyContainer = document.getElementById('history-container');
-        const btnSeeMoreHistory = document.getElementById('btnSeeMoreHistory');
         const pillsContainer = document.getElementById('monthPillsContainer');
         const divBreakdown = document.getElementById('div-breakdown');
         
@@ -867,7 +868,6 @@
             button.innerText = labelText;
             button.onclick = () => {
                 state.selectedMonthYear = my;
-                historyLimit = 5; // Reseta a trava para 5 lançamentos ao trocar de mês
                 save();
                 render();
             };
@@ -875,26 +875,19 @@
         });
 
         let totalSelectedMonth = 0;
-        let breakdown = {}; // Guarda a soma de gastos por pagador
+        let breakdown = {};
         historyContainer.innerHTML = '';
 
         const filteredHistory = state.history.filter(h => getMonthYearFromKey(h.date) === state.selectedMonthYear);
 
-        // Aplica o limite dos últimos N itens
-        const visibleHistory = filteredHistory.slice(0, historyLimit);
-
         filteredHistory.forEach(h => {
             totalSelectedMonth += h.total;
 
-            // Lógica do rateio por pessoa
             const pBuyer = h.buyer || "Não Informado";
             if (!breakdown[pBuyer]) breakdown[pBuyer] = 0;
             breakdown[pBuyer] += h.total;
-        });
 
-        visibleHistory.forEach(h => {
             const pMarket = h.market || "Não Informado";
-            const pBuyer = h.buyer || "Não Informado";
 
             const div = document.createElement('div');
             div.className = 'history-item';
@@ -909,17 +902,8 @@
             historyContainer.appendChild(div);
         });
 
-        // Exibe ou oculta o botão de "Ver Mais" dependendo do número de compras
-        if (filteredHistory.length > historyLimit) {
-            const remaining = filteredHistory.length - historyLimit;
-            btnSeeMoreHistory.innerText = `Ver mais compras (${remaining} restantes)`;
-            btnSeeMoreHistory.style.display = 'block';
-        } else {
-            btnSeeMoreHistory.style.display = 'none';
-        }
-
         if (filteredHistory.length === 0) {
-            historyContainer.innerHTML = `<div style="text-align:center; color:gray; padding:12px; font-size:0.85rem;">Nenhuma compra neste mês.</div>`;
+            historyContainer.innerHTML = `<div style="text-align:center; color:gray; padding:16px; font-size:0.85rem;">Nenhuma compra neste mês.</div>`;
         }
 
         const [selM, selY] = state.selectedMonthYear.split('/');
@@ -927,7 +911,6 @@
         document.getElementById('label-total-month').innerText = `Total de ${activeMonthName}:`;
         document.getElementById('total-month').innerText = `R$ ${totalSelectedMonth.toFixed(2).replace('.', ',')}`;
 
-        // Renderiza a divisão de contas na caixinha cinza se houver dados
         const buyers = Object.keys(breakdown);
         if (buyers.length > 0) {
             const title = document.createElement('div');
@@ -1008,7 +991,6 @@
         document.getElementById('modalHistoryView').style.display = 'flex';
     }
 
-    // Gerenciador genérico de menus suspensos automáticos
     function setupLiveSuggestions(inputId, suggestionsId, bankKey) {
         const input = document.getElementById(inputId);
         const suggestions = document.getElementById(suggestionsId);
@@ -1107,17 +1089,9 @@
             }
         };
 
-        // Ativa os autocompletes inteligentes de Mercado e Comprador
         setupLiveSuggestions('finishMarket', 'marketSuggestions', 'marketBank');
         setupLiveSuggestions('finishBuyer', 'buyerSuggestions', 'buyerBank');
 
-        // Ação para expandir o histórico ao clicar em "Ver Mais"
-        document.getElementById('btnSeeMoreHistory').onclick = () => {
-            historyLimit += 5;
-            render();
-        };
-
-        // Fecha menus suspensos ao clicar fora
         document.addEventListener('click', (e) => {
             if (e.target !== input) suggestions.style.display = 'none';
             if (e.target !== document.getElementById('finishMarket')) document.getElementById('marketSuggestions').style.display = 'none';
