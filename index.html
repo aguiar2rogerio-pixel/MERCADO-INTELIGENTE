@@ -375,6 +375,16 @@
             cursor: pointer;
         }
 
+        .btn-delete {
+            background-color: transparent;
+            border: 1px solid var(--danger-color);
+            color: var(--danger-color);
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
         .history-item {
             display: flex;
             justify-content: space-between;
@@ -439,7 +449,7 @@
         }
 
         .history-preview-list {
-            max-height: 240px;
+            max-height: 200px;
             overflow-y: auto;
             margin-bottom: 16px;
         }
@@ -573,17 +583,35 @@
     </div>
 </div>
 
-<!-- MODAL DE VISUALIZAÇÃO DO HISTÓRICO -->
+<!-- MODAL DE VISUALIZAÇÃO E EDIÇÃO DO HISTÓRICO -->
 <div class="modal-overlay" id="modalHistoryView">
     <div class="modal">
-        <h3 class="modal-title" id="historyViewTitle">Itens da Compra</h3>
-        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;" id="historyViewMeta"></div>
+        <h3 class="modal-title" id="historyViewTitle">Editar Compra</h3>
+        
+        <div class="form-row">
+            <label>Onde foi a compra? (Mercado)</label>
+            <input type="text" id="editHistoryMarket" placeholder="Ex: Shibata" autocomplete="off">
+            <div class="suggestions" id="editHistoryMarketSuggestions" style="right: 0;"></div>
+        </div>
+        <div class="form-row">
+            <label>Quem pagou? (Colaborador)</label>
+            <input type="text" id="editHistoryBuyer" placeholder="Ex: Rogério" autocomplete="off">
+            <div class="suggestions" id="editHistoryBuyerSuggestions" style="right: 0;"></div>
+        </div>
+
+        <label style="font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 6px;">Itens Comprados:</label>
         <div class="history-preview-list" id="historyViewList"></div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; padding-top: 10px; border-top: 2px dashed #444;">
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px; padding-top: 10px; border-top: 2px dashed #444;">
             <span>Total:</span>
             <b id="historyViewTotal" style="color: var(--primary-color); font-size: 1.1rem;">R$ 0,00</b>
         </div>
-        <button class="btn-cancel" id="btnCloseHistoryView" style="width: 100%;">Fechar</button>
+
+        <div class="modal-btns">
+            <button class="btn-delete" id="btnDeleteHistory">Excluir</button>
+            <button class="btn-cancel" id="btnCloseHistoryView">Cancelar</button>
+            <button class="btn-save" id="btnSaveHistory">Salvar</button>
+        </div>
     </div>
 </div>
 
@@ -603,6 +631,8 @@
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
     ];
+
+    let currentEditingHistoryId = null;
 
     function capitalizeName(name) {
         let trimmed = name.trim();
@@ -964,8 +994,11 @@
     }
 
     function openHistoryViewModal(purchase) {
-        document.getElementById('historyViewTitle').innerText = `Compra de ${purchase.date}`;
-        document.getElementById('historyViewMeta').innerText = `Mercado: ${purchase.market || "Não Informado"} | Pago por: ${purchase.buyer || "Não Informado"}`;
+        currentEditingHistoryId = purchase.id;
+        
+        document.getElementById('historyViewTitle').innerText = `Detalhes (${purchase.date})`;
+        document.getElementById('editHistoryMarket').value = purchase.market === "Não Informado" ? "" : purchase.market;
+        document.getElementById('editHistoryBuyer').value = purchase.buyer === "Não Informado" ? "" : purchase.buyer;
         document.getElementById('historyViewTotal').innerText = `R$ ${purchase.total.toFixed(2).replace('.', ',')}`;
         
         const listContainer = document.getElementById('historyViewList');
@@ -1091,11 +1124,16 @@
 
         setupLiveSuggestions('finishMarket', 'marketSuggestions', 'marketBank');
         setupLiveSuggestions('finishBuyer', 'buyerSuggestions', 'buyerBank');
+        
+        setupLiveSuggestions('editHistoryMarket', 'editHistoryMarketSuggestions', 'marketBank');
+        setupLiveSuggestions('editHistoryBuyer', 'editHistoryBuyerSuggestions', 'buyerBank');
 
         document.addEventListener('click', (e) => {
             if (e.target !== input) suggestions.style.display = 'none';
             if (e.target !== document.getElementById('finishMarket')) document.getElementById('marketSuggestions').style.display = 'none';
             if (e.target !== document.getElementById('finishBuyer')) document.getElementById('buyerSuggestions').style.display = 'none';
+            if (e.target !== document.getElementById('editHistoryMarket')) document.getElementById('editHistoryMarketSuggestions').style.display = 'none';
+            if (e.target !== document.getElementById('editHistoryBuyer')) document.getElementById('editHistoryBuyerSuggestions').style.display = 'none';
         });
 
         document.getElementById('btnCancelEdit').onclick = () => {
@@ -1122,6 +1160,44 @@
 
         document.getElementById('btnCloseHistoryView').onclick = () => {
             document.getElementById('modalHistoryView').style.display = 'none';
+        };
+
+        document.getElementById('btnSaveHistory').onclick = () => {
+            if (!currentEditingHistoryId) return;
+
+            const marketInput = document.getElementById('editHistoryMarket').value.trim();
+            const buyerInput = document.getElementById('editHistoryBuyer').value.trim();
+
+            const market = marketInput ? capitalizeName(marketInput) : "Não Informado";
+            const buyer = buyerInput ? capitalizeName(buyerInput) : "Não Informado";
+
+            if (marketInput && !state.marketBank.includes(market)) {
+                state.marketBank.push(market);
+            }
+            if (buyerInput && !state.buyerBank.includes(buyer)) {
+                state.buyerBank.push(buyer);
+            }
+
+            const idx = state.history.findIndex(h => h.id === currentEditingHistoryId);
+            if (idx !== -1) {
+                state.history[idx].market = market;
+                state.history[idx].buyer = buyer;
+                save();
+                render();
+            }
+
+            document.getElementById('modalHistoryView').style.display = 'none';
+        };
+
+        document.getElementById('btnDeleteHistory').onclick = () => {
+            if (!currentEditingHistoryId) return;
+            const confirmDel = confirm("Deseja realmente apagar este registro de compra?");
+            if (confirmDel) {
+                state.history = state.history.filter(h => h.id !== currentEditingHistoryId);
+                save();
+                render();
+                document.getElementById('modalHistoryView').style.display = 'none';
+            }
         };
 
         document.getElementById('btnBackup').onclick = () => {
