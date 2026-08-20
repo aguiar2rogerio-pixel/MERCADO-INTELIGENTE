@@ -40,6 +40,13 @@
             text-align: center;
         }
 
+        .app-version {
+            color: var(--text-secondary);
+            font-size: 0.65rem;
+            text-align: center;
+            opacity: 0.65;
+        }
+
         .visually-hidden {
             position: absolute;
             width: 1px;
