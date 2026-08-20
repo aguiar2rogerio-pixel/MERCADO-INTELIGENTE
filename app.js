@@ -183,6 +183,8 @@
     function updateItem(id, updates) {
         const idx = state.items.findIndex(i => i.id === id);
         if (idx !== -1) {
+            const previousItem = state.items[idx];
+            const previousKey = normalizeText(previousItem.name);
             if (updates.qty !== undefined) {
                 updates.qty = parseWeight(updates.qty);
             }
@@ -199,6 +201,9 @@
             state.items[idx] = nextItem;
             
             const key = normalizeText(state.items[idx].name);
+            if (previousKey !== key) {
+                delete state.itemBank[previousKey];
+            }
             state.itemBank[key] = {
                 name: state.items[idx].name,
                 price: state.items[idx].price,
