@@ -1,9 +1,9 @@
-const CACHE_NAME = 'smart-shopping-list-v5';
+const CACHE_NAME = 'smart-shopping-list-v6';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css',
-  './app.js',
+  './styles.css?v=6',
+  './app.js?v=6',
   './manifest.json',
   './icon-192x192.png',
   './icon-512x512.png'
