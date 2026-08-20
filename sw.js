@@ -1,8 +1,12 @@
-const CACHE_NAME = 'smart-shopping-v3';
+const CACHE_NAME = 'smart-shopping-list-v4';
 const ASSETS = [
   './',
   './index.html',
-  './manifest.json'
+  './styles.css',
+  './app.js',
+  './manifest.json',
+  './icon-192x192.png',
+  './icon-512x512.png'
 ];
 
 // Instala o Service Worker e prepara o cache inicial
@@ -31,10 +35,14 @@ self.addEventListener('activate', (e) => {
 
 // REDE PRIMEIRO (Network-First): Busca o mais novo na internet. Se estiver offline, usa o cache.
 self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== self.location.origin) {
+    return;
+  }
+
   e.respondWith(
     fetch(e.request)
       .then((networkResponse) => {
-        // Se a busca na rede deu certo, atualiza o cache silenciosamente em segundo plano
+        // Se a busca na rede deu certo, atualiza o cache silenciosamente em segundo plano.
         if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -44,7 +52,7 @@ self.addEventListener('fetch', (e) => {
         return networkResponse;
       })
       .catch(() => {
-        // Se deu erro (sem internet/offline), entrega a versão salva no celular
+        // Se deu erro (sem internet/offline), entrega a versão salva no celular.
         return caches.match(e.request);
       })
   );
