@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-shopping-list-v4';
+const CACHE_NAME = 'smart-shopping-list-v5';
 const ASSETS = [
   './',
   './index.html',

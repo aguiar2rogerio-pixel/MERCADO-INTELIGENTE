@@ -794,7 +794,7 @@
     init();
 
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js')
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
         .then(reg => console.log('SW registrado com sucesso!', reg))
         .catch(err => console.log('Erro ao registrar SW externo:', err));
     }
