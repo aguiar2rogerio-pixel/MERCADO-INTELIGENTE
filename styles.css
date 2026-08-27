@@ -494,3 +494,23 @@
             cursor: pointer;
             min-width: 0;
         }
+
+/* Ajuste mobile: mantém os controles de histórico acessíveis quando o conteúdo cresce. */
+@media (max-width: 600px) {
+    body {
+        height: 100dvh;
+        min-height: 100dvh;
+        overflow: hidden;
+    }
+
+    main {
+        padding-bottom: 24px;
+    }
+
+    footer {
+        position: static;
+        flex: 0 0 auto;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+        gap: 8px;
+    }
+}
