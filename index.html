@@ -7,8 +7,7 @@
     <title>Lista de Compras Inteligente</title>
     
     <link rel="manifest" href="manifest.json">
-    
-    <link rel="stylesheet" href="styles.css?v=7">
+    <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 
@@ -41,10 +40,7 @@
 
     <section id="section-history">
         <h2>Histórico por Mês</h2>
-        
         <div class="month-pills" id="monthPillsContainer"></div>
-
-        <!-- QUADRO COM ROLAGEM INTERNA PARA O HISTÓRICO -->
         <div class="history-scroll-box" id="history-container"></div>
         
         <div class="monthly-summary" id="monthly-summary">
@@ -78,7 +74,6 @@
     <div class="app-version" aria-label="Versão do aplicativo">Versão 3.0</div>
 </footer>
 
-<!-- MODAL DE EDIÇÃO DO ITEM -->
 <div class="modal-overlay" id="modalEdit">
     <div class="modal">
         <div class="form-row">
@@ -107,7 +102,6 @@
     </div>
 </div>
 
-<!-- MODAL DE FINALIZAÇÃO DA COMPRA -->
 <div class="modal-overlay" id="modalFinishPurchase">
     <div class="modal">
         <h3 class="modal-title" style="color: var(--primary-color);">Detalhes da Compra</h3>
@@ -128,11 +122,9 @@
     </div>
 </div>
 
-<!-- MODAL DE VISUALIZAÇÃO E EDIÇÃO DO HISTÓRICO -->
 <div class="modal-overlay" id="modalHistoryView">
     <div class="modal">
         <h3 class="modal-title" id="historyViewTitle">Editar Compra</h3>
-        
         <div class="form-row">
             <label for="editHistoryMarket">Onde foi a compra? (Mercado)</label>
             <input type="text" id="editHistoryMarket" placeholder="Ex: Shibata" autocomplete="off">
@@ -143,15 +135,12 @@
             <input type="text" id="editHistoryBuyer" placeholder="Ex: Rogério" autocomplete="off">
             <div class="suggestions" id="editHistoryBuyerSuggestions" style="right: 0;"></div>
         </div>
-
         <label style="font-size: 0.85rem; color: var(--text-secondary); display: block; margin-bottom: 6px;">Itens Comprados:</label>
         <div class="history-preview-list" id="historyViewList"></div>
-        
         <div style="display: flex; justify-content: space-between; margin-bottom: 16px; padding-top: 10px; border-top: 2px dashed #444;">
             <span>Total:</span>
             <b id="historyViewTotal" style="color: var(--primary-color); font-size: 1.1rem;">R$ 0,00</b>
         </div>
-
         <div class="modal-btns">
             <button class="btn-delete" id="btnDeleteHistory">Excluir</button>
             <button class="btn-cancel" id="btnCloseHistoryView">Cancelar</button>
@@ -160,7 +149,15 @@
     </div>
 </div>
 
-
-    <script src="app.js?v=6" defer></script>
+<script src="app.js?v=8" defer></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(() => console.log('Service Worker Registrado'))
+        .catch(err => console.error('Erro SW:', err));
+    });
+  }
+</script>
 </body>
 </html>
