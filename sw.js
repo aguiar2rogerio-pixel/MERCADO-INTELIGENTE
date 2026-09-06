@@ -1,26 +1,33 @@
-const CACHE_NAME = 'smart-shopping-v8';
+const CACHE_NAME = 'smart-shopping-v9';
 
-// Recursos com caminhos relativos corretos para o GitHub Pages
+// Arquivos exatamente como estão na raiz do seu repositório GitHub
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=7',
-  './app.js?v=6',
+  './styles.css',
+  './app.js',
   './manifest.json',
   './icon-192x192.png',
   './icon-512x512.png',
   './offline.html'
 ];
 
+// Instalação tolerante a falhas (não quebra a instalação se 1 arquivo falhar)
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
-      .catch((err) => console.warn('[SW] Erro ao salvar assets:', err))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      for (const asset of ASSETS) {
+        try {
+          await cache.add(asset);
+        } catch (err) {
+          console.warn('[SW] Erro ao salvar asset individual:', asset, err);
+        }
+      }
+    }).then(() => self.skipWaiting())
   );
 });
 
+// Limpeza de caches antigos
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
@@ -33,7 +40,7 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Estratégia Cache-First: Abre rápido offline e não trava no timeout
+// Estratégia de busca offline resiliente
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
@@ -44,14 +51,14 @@ self.addEventListener('fetch', (e) => {
       }
 
       return fetch(e.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
+        if (networkResponse && networkResponse.status === 200 && e.request.url.startsWith(self.location.origin)) {
           const respClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, respClone));
         }
         return networkResponse;
       });
     }).catch(() => {
-      // Fallback relativo para subpastas do GitHub Pages
+      // Se estiver offline em navegação de tela, entrega a aplicação principal
       if (e.request.mode === 'navigate') {
         return caches.match('./index.html').then((index) => index || caches.match('./offline.html'));
       }
